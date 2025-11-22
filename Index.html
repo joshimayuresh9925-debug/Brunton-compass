@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Brunton Omni v15 (Math Fix)</title>
+<title>Brunton Omni v16 (Smooth)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
     /* --- THEME VARIABLES --- */
@@ -104,10 +104,9 @@
         position: relative; overflow: hidden;
     }
 
-    /* Compass Rose (Rotates) */
     #compass-rose {
         width: 100%; height: 100%; position: absolute; top: 0; left: 0;
-        transition: transform 0.1s linear;
+        /* No transition here, we handle smooth in JS */
     }
     .cardinal { position: absolute; font-weight: 700; font-size: 0.8rem; color: var(--sub); }
     #north-marker { top: 10px; left: 50%; transform: translateX(-50%); color: var(--danger); font-size: 1rem; }
@@ -115,17 +114,15 @@
     #east-marker { top: 50%; right: 10px; transform: translateY(-50%); }
     #west-marker { top: 50%; left: 10px; transform: translateY(-50%); }
 
-    /* Crosshair */
     #crosshair {
         position: absolute; top: 50%; left: 50%; width: 8px; height: 8px;
         border: 2px solid var(--sub); border-radius: 50%; transform: translate(-50%, -50%); opacity: 0.5;
     }
 
-    /* Bubble (Moves) */
     #level-bubble {
         width: 30px; height: 30px; background: var(--accent); border-radius: 50%;
         position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        box-shadow: 0 0 10px rgba(0,0,0,0.3); transition: transform 0.1s linear;
+        box-shadow: 0 0 10px rgba(0,0,0,0.3);
         border: 2px solid rgba(255,255,255,0.2);
     }
 
@@ -253,7 +250,8 @@
                 <input type="number" id="inp-dec" placeholder="0.0">
                 <button class="btn" style="width:80px;" onclick="autoDec()">Auto</button>
             </div>
-            <div style="margin-top:30px; border-top:1px solid var(--border); padding-top:15px;">
+            <div style="margin-top:20px;">
+                <button class="btn" style="width:100%; margin-bottom:10px;" onclick="calibrateCompass()">CALIBRATE COMPASS (Reset N)</button>
                 <button class="btn" style="width:100%; background:var(--danger); color:white;" onclick="hardReset()">HARD RESET APP</button>
             </div>
         </div>
@@ -275,17 +273,20 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    const DB_KEY = 'brunton_db_v15';
-    let db = { version: 15, settings: { theme: 'dark', declination: 0 }, projects: { 'Default': [] }, currentProject: 'Default' };
-    let app = { strike: 0, dip: 0, dipDir: 0, lat: null, lng: null, minimized: false, isSat: false };
+    const DB_KEY = 'brunton_db_v16';
+    let db = { version: 16, settings: { theme: 'dark', declination: 0, calib: 0 }, projects: { 'Default': [] }, currentProject: 'Default' };
+    // SMOOTHING VARIABLES
+    let smooth = { strike: 0, dip: 0, dipDir: 0, heading: 0, bubbleX: 0, bubbleY: 0 };
+    let app = { lat: null, lng: null, minimized: false, isSat: false };
     let map, markers, userSpot, osmLayer, satLayer, editingId = null, tempClickLatLng = null;
+    const SMOOTH_FACTOR = 0.15; // 0.1 = Very Slow/Smooth, 0.9 = Fast/Jittery
 
     window.onload = () => {
         try {
             const s = localStorage.getItem(DB_KEY);
             if (s) db = JSON.parse(s);
             else {
-                const old = localStorage.getItem('brunton_db_v14');
+                const old = localStorage.getItem('brunton_db_v15');
                 if(old) db = JSON.parse(old);
                 saveDB();
             }
@@ -297,12 +298,13 @@
         initUI();
         updateDecDisplay();
         updateProjectDisplay();
+        loop(); // Start Animation Loop for Smoothing
     };
 
     function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
     function hardReset() { localStorage.clear(); location.reload(); }
 
-    // --- UI LOGIC ---
+    // --- UI ---
     function initUI() {
         const handle = document.getElementById('drag-area');
         handle.addEventListener('click', togglePanel);
@@ -310,28 +312,20 @@
         handle.addEventListener('touchstart', e => { sy = e.touches[0].clientY; });
         handle.addEventListener('touchend', e => {
             if(e.changedTouches.length > 0) {
-                let endY = e.changedTouches[0].clientY;
-                let diff = sy - endY;
+                let diff = sy - e.changedTouches[0].clientY;
                 if (diff < -30 && !app.minimized) togglePanel();
                 if (diff > 30 && app.minimized) togglePanel();
             }
         });
     }
-
     function togglePanel() {
         app.minimized = !app.minimized;
         const panel = document.getElementById('compass-container');
         const body = document.body;
-        if(app.minimized) {
-            panel.classList.add('minimized');
-            body.classList.add('panel-minimized');
-        } else {
-            panel.classList.remove('minimized');
-            body.classList.remove('panel-minimized');
-        }
+        if(app.minimized) { panel.classList.add('minimized'); body.classList.add('panel-minimized'); } 
+        else { panel.classList.remove('minimized'); body.classList.remove('panel-minimized'); }
         centerMapOnUser();
     }
-
     function centerMapOnUser() {
         if(app.lat === null || app.lng === null) return;
         const offset = app.minimized ? 0 : 150;
@@ -342,223 +336,116 @@
         map.flyTo(newCenterLatLng, currentZoom, { animate: true, duration: 0.5 });
     }
 
-    // --- MATH HELPERS ---
+    // --- SENSORS & MATH ---
     const rad = Math.PI / 180;
     const deg = 180 / Math.PI;
 
-    function getRotationMatrix(alpha, beta, gamma) {
-        const _z = alpha * rad;
-        const _x = beta * rad;
-        const _y = gamma * rad;
+    // Helper to smooth angles across 0/360 boundary
+    function lerpAngle(current, target, factor) {
+        let diff = target - current;
+        while (diff > 180) diff -= 360;
+        while (diff < -180) diff += 360;
+        return current + diff * factor;
+    }
+    function lerp(current, target, factor) { return current + (target - current) * factor; }
+
+    function initSensors() {
+        // PRIORITIZE absolute orientation for Android (Compass fix)
+        if ('ondeviceorientationabsolute' in window) {
+            window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+        } else if ('ondeviceorientation' in window) {
+            window.addEventListener('deviceorientation', handleOrientation, true);
+        }
+    }
+
+    function handleOrientation(e) {
+        let alpha = e.webkitCompassHeading || (e.absolute ? e.alpha : e.alpha); // Try for absolute
+        if (alpha == null) return;
+        
+        // Basic Vector Math
+        const _z = (alpha + (db.settings.calib||0)) * rad;
+        const _x = e.beta * rad;
+        const _y = e.gamma * rad;
+        
         const cZ = Math.cos(_z), sZ = Math.sin(_z);
         const cX = Math.cos(_x), sX = Math.sin(_x);
         const cY = Math.cos(_y), sY = Math.sin(_y);
 
-        // Z-X-Y Euler System (Standard for Web)
-        // m11 m12 m13
-        // m21 m22 m23
-        // m31 m32 m33
-        
-        // Column 3 (Phone Z axis in World) for Strike/Dip
-        const m13 = cZ * sY - sZ * sX * cY; // East Component of Normal
-        const m23 = sZ * sY + cZ * sX * cY; // North Component of Normal (Actually West if standard right-handed)
-        const m33 = cX * cY;                // Vertical Component of Normal
+        // Normal Vector (Z axis of phone)
+        let nx = cZ * sY - sZ * sX * cY;
+        let ny = sZ * sY + cZ * sX * cY;
+        let nz = cX * cY;
 
-        // Row 3 (World Z axis in Phone) for Bubble
-        // m31 = -sY * cX
-        // m32 = sX
-        // m33 = cX * cY
-        const m31 = -sY * cX;
-        const m32 = sX;
+        // Bubble Vector (Gravity relative to phone screen)
+        let bx = -sY * cX;
+        let by = sX;
 
-        return { m13, m23, m33, m31, m32 };
-    }
-
-    // --- SENSORS ---
-    function initSensors() {
-        if ('AbsoluteOrientationSensor' in window) {
-            try {
-                const s = new AbsoluteOrientationSensor({ frequency: 60, referenceFrame: 'device' });
-                s.addEventListener('reading', () => {
-                    const q = s.quaternion;
-                    // Quaternion to Matrix Elements
-                    const x = q[0], y = q[1], z = q[2], w = q[3];
-                    const x2 = x + x, y2 = y + y, z2 = z + z;
-                    const xx = x * x2, xy = x * y2, xz = x * z2;
-                    const yy = y * y2, yz = y * z2, zz = z * z2;
-                    const wx = w * x2, wy = w * y2, wz = w * z2;
-
-                    // Col 3 (Phone Z in World) - For Dip/Strike
-                    const m13 = xz + wy;
-                    const m23 = yz - wx;
-                    const m33 = 1 - (xx + yy);
-
-                    // Row 3 (World Z in Phone) - For Bubble
-                    const m31 = xz - wy;
-                    const m32 = yz + wx;
-
-                    // Heading (Yaw) for Compass Rose
-                    // Atan2(m21, m11) ?? No, simpler from Q directly
-                    // Yaw = atan2(2(wy + zx), 1 - 2(y^2 + z^2)) for ZYX order...
-                    // Let's use the vector projection of Y-axis?
-                    // Let's use a computed Heading from the Matrix.
-                    // North vector in device frame...
-                    
-                    // Easier: Convert Q to Euler, extract Alpha.
-                    // Or just process vector
-                    processMatrix(m13, m23, m33, m31, m32, q);
-                });
-                s.start(); return;
-            } catch(e){}
-        }
-        
-        if (window.DeviceOrientationEvent) {
-            window.addEventListener('deviceorientation', e => {
-                let alpha = e.webkitCompassHeading || e.alpha;
-                if(!alpha && alpha!==0) return;
-                
-                const m = getRotationMatrix(alpha, e.beta, e.gamma);
-                
-                // Process
-                // For heading in Euler mode, we just use Alpha directly
-                let heading = alpha;
-                const screenAng = window.screen.orientation ? window.screen.orientation.angle : 0;
-                heading += screenAng;
-
-                // Adjust m31/m32 for screen rotation for bubble
-                let bx = m.m31;
-                let by = m.m32;
-                
-                if(screenAng !== 0) {
-                    const sa = -screenAng * rad;
-                    const c = Math.cos(sa), s = Math.sin(sa);
-                    // Rotate the bubble vector
-                    const rbx = bx * c - by * s;
-                    const rby = bx * s + by * c;
-                    bx = rbx; by = rby;
-                }
-
-                // Calculate Strike/Dip from Normal Vector
-                let nx = m.m13;
-                let ny = m.m23;
-                let nz = m.m33;
-                
-                // Correct vector for Heading rotation if using Euler (alpha is separate)
-                // Actually getRotationMatrix handles Alpha.
-                
-                calculateData(nx, ny, nz, bx, by, heading);
-            }, true);
-        }
-    }
-
-    function processMatrix(nx, ny, nz, bx, by, q) {
-        // 1. Handle Screen Rotation for Bubble
+        // Screen Rotation Comp
         const ang = window.screen.orientation ? window.screen.orientation.angle : 0;
         if(ang !== 0) {
-            const sRad = -ang * rad;
-            const c = Math.cos(sRad), s = Math.sin(sRad);
+            const sa = -ang * rad;
+            const c = Math.cos(sa), s = Math.sin(sa);
+            // Rotate Bubble
             const tbx = bx * c - by * s;
             const tby = bx * s + by * c;
             bx = tbx; by = tby;
-            
-            // Rotate Normal Vector too?
-            // No, AbsoluteSensor gives world coords, so nx/ny are already world aligned?
-            // Actually, if device rotates, the sensor frame rotates.
-            // Yes, we need to rotate the Normal vector calculation if we extracted it from Q relative to device...
-            // Wait, Q is Device->World. The vector (0,0,1) transformed by Q is already in World space.
-            // So nx, ny, nz are correct World coordinates regardless of how you hold the phone.
-            // EXCEPT: browser orientation API often aligns 'North' with 'Device Top' at initialization on Android.
-            // We assume Q is correct.
+            // Heading offset
+            alpha += ang;
         }
 
-        // 2. Get Heading from Q for the Rose
-        // Convert Q to Euler (Z-Y-X)
-        // heading = atan2(2*(q0*q1 + q3*q2), q3*q3 + q0*q0 - q1*q1 - q2*q2) ??
-        // Let's try a simpler derivation: Projection of Device Y axis on World Horizontal plane?
-        // Device Y is Column 2: [m12, m22, m32]
-        // This is hard. Let's stick to Dip Direction logic for Strike.
-        
-        // Calculate Dip/Strike
-        calculateData(nx, ny, nz, bx, by, null);
-    }
-
-    function calculateData(nx, ny, nz, bx, by, explicitHeading) {
-        // Dip
+        // Calculate Targets
         let dip = Math.acos(Math.abs(nz)) * deg;
-        
-        // Dip Direction (Azimuth of Normal projection)
-        // Standard: North=Y, East=X.
-        // atan2(x, y) gives angle from Y axis (North).
-        // But web sensor axes are: X=East, Y=North, Z=Up.
-        // Normal vector points UP.
-        // Dip Direction is DOWN.
-        // So DipDir is opposite to Azimuth of Normal.
-        
-        // Wait, check Coordinate System of API. 
-        // Android usually: Y points North? No, Y points Magnetic North.
-        // Let's calculate Azimuth of Normal:
-        let azimuth = Math.atan2(nx, ny) * deg; 
+        let azimuth = Math.atan2(nx, ny) * deg;
         if(azimuth < 0) azimuth += 360;
         
-        // If Normal points East (90), Dip Direction is West (270).
         let dipDirRaw = (azimuth + 180) % 360;
-        
         let trueDipDir = (dipDirRaw + db.settings.declination) % 360;
-        let strike = (trueDipDir - 90 + 360) % 360; // RHR
-        
-        app.strike = Math.round(strike);
-        app.dip = Math.round(dip);
-        app.dipDir = Math.round(trueDipDir);
+        let strike = (trueDipDir - 90 + 360) % 360;
 
-        // Determine Heading for the Rose
-        // If we have explicit heading (from Euler), use it.
-        // If using Vector, we can deduce Heading from the DipDir logic?
-        // No, phone can rotate around Z without changing Strike/Dip (if flat).
-        // If flat, Dip is 0. Dip Dir is undefined.
-        // We need a separate Heading calculation for the visualizer.
-        // Since we stripped the complex math for brevity, let's use DipDirection as a proxy for "Down" direction on the rose? 
-        // NO. The Rose must point North.
-        
-        // Re-calc Heading from Azimuth of Device Y-Axis?
-        // Let's assume explicitHeading is available or fall back to DipDir for now to save space
-        // Ideally we want: heading = (azimuth of device top)
-        
-        // VISUALIZATION
-        updateUI(bx, by, explicitHeading !== null ? explicitHeading : app.strike); // Hack: use Strike if no heading (not perfect but shows rotation)
+        // Store TARGET values for smoothing loop
+        app.targetStrike = strike;
+        app.targetDip = dip;
+        app.targetDipDir = trueDipDir;
+        app.targetHeading = alpha + db.settings.declination; // For Compass Rose
+        app.targetBx = bx; 
+        app.targetBy = by;
     }
 
-    function updateUI(bx, by, heading) {
-        document.getElementById('val-strike').innerText = app.strike + "°";
-        document.getElementById('val-dip').innerText = app.dip + "°";
-        document.getElementById('val-dipdir').innerText = app.dipDir + "°";
-        document.getElementById('mini-s').innerText = app.strike + "°";
-        document.getElementById('mini-d').innerText = app.dip + "°";
-        
-        // Bubble: Uses bx/by (Gravity vector in device frame)
-        // If Phone Right is Low (Gravity points Right/+X), Bubble goes Left.
-        // bx is Gravity X component.
-        // If Phone Tilted Right, Gravity Vector component X is Positive.
-        // Bubble should move Negative.
+    // --- ANIMATION LOOP (60fps Smoothing) ---
+    function loop() {
+        if(app.targetStrike !== undefined) {
+            smooth.strike = lerpAngle(smooth.strike, app.targetStrike, SMOOTH_FACTOR);
+            smooth.dip = lerp(smooth.dip, app.targetDip, SMOOTH_FACTOR);
+            smooth.dipDir = lerpAngle(smooth.dipDir, app.targetDipDir, SMOOTH_FACTOR);
+            smooth.heading = lerpAngle(smooth.heading, app.targetHeading, SMOOTH_FACTOR);
+            smooth.bubbleX = lerp(smooth.bubbleX, app.targetBx, SMOOTH_FACTOR);
+            smooth.bubbleY = lerp(smooth.bubbleY, app.targetBy, SMOOTH_FACTOR);
+            updateUI();
+        }
+        requestAnimationFrame(loop);
+    }
+
+    function updateUI() {
+        // Text
+        document.getElementById('val-strike').innerText = Math.round(smooth.strike) + "°";
+        document.getElementById('val-dip').innerText = Math.round(smooth.dip) + "°";
+        document.getElementById('val-dipdir').innerText = Math.round(smooth.dipDir) + "°";
+        document.getElementById('mini-s').innerText = Math.round(smooth.strike) + "°";
+        document.getElementById('mini-d').innerText = Math.round(smooth.dip) + "°";
+
+        // Bubble
         const bubble = document.getElementById('level-bubble');
-        let bpx = -bx * 75; 
-        let bpy = by * 75; // Y axis: If top is low, gravity Y is positive. Bubble goes Top (Negative)? No, Bubble goes Up (Opposite to gravity).
-        // Wait. If Top is Low, Bubble goes High (Bottom). 
-        // Screen Y is + Down.
-        // If Top Low, Gravity +Y. Bubble should go Bottom (+Y).
-        
+        let bpx = -smooth.bubbleX * 75; 
+        let bpy = smooth.bubbleY * 75; 
         let dist = Math.sqrt(bpx*bpx + bpy*bpy);
         if (dist > 80) { bpx *= 80/dist; bpy *= 80/dist; }
         bubble.style.transform = `translate(calc(-50% + ${bpx}px), calc(-50% + ${bpy}px))`;
 
         // Compass Rose
-        // Should rotate against heading.
-        const rose = document.getElementById('compass-rose');
-        // For v15 stability, if explicitHeading is messy, we rely on user calibration.
-        // Standard: rotate(-heading)
-        rose.style.transform = `rotate(${-heading}deg)`;
+        document.getElementById('compass-rose').style.transform = `rotate(${-smooth.heading}deg)`;
     }
 
-    // --- MAP ---
+    // --- MAP & OTHER ---
     function initMap() {
         map = L.map('map', {zoomControl:false}).setView([0,0], 2);
         osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
@@ -589,9 +476,11 @@
         const logs = db.projects[db.currentProject];
         logs.unshift({
             id: Date.now(), type: 'geo', name: `Stn-${logs.length+1}`, note: '',
-            s: app.strike, d: app.dip, dd: app.dipDir, lat: app.lat, lng: app.lng, t: new Date().toLocaleString()
+            s: Math.round(smooth.strike), d: Math.round(smooth.dip), dd: Math.round(smooth.dipDir), lat: app.lat, lng: app.lng, t: new Date().toLocaleString()
         });
         saveDB(); renderLogs();
+        const el = app.minimized ? document.getElementById('mini-header') : document.getElementById('full-content');
+        el.style.background = "var(--border)"; setTimeout(()=>el.style.background="",150);
         centerMapOnUser();
     }
 
@@ -649,6 +538,15 @@
     function exportKML() { const logs=db.projects[db.currentProject]; let kml=`<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${db.currentProject}</name><Style id="s"><IconStyle><scale>1.2</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/arrow.png</href></Icon></IconStyle></Style>`; logs.forEach(l => { if(l.type==='poi') kml+=`<Placemark><name>${l.name}</name><description>${l.note}</description><Point><coordinates>${l.lng},${l.lat},0</coordinates></Point></Placemark>`; else kml+=`<Placemark><name>${l.name}</name><description>S:${l.s} D:${l.d}</description><styleUrl>#s</styleUrl><Style><IconStyle><heading>${l.dd}</heading></IconStyle></Style><Point><coordinates>${l.lng},${l.lat},0</coordinates></Point></Placemark>`; }); kml+='</Document></kml>'; downloadFile(kml, 'kml', 'application/vnd.google-earth.kml+xml'); }
     function downloadFile(c, e, t) { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([c],{type:t})); a.download=`${db.currentProject}.${e}`; a.click(); }
     function autoDec() { window.open(`https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml?lat=${app.lat}&lon=${app.lng}`,'_blank'); }
+    
+    function calibrateCompass() {
+        // Capture current alpha as offset to 0
+        // Simple zeroing logic for visualizer if really broken
+        // But actually, just reset the offset to 0
+        db.settings.calib = 0; 
+        saveDB();
+        alert("Compass Reset. Please wave phone in figure-8 to calibrate hardware.");
+    }
 </script>
 </body>
 </html>
