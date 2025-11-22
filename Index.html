@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Brunton Omni v11</title>
+<title>Brunton Omni v12</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
     /* --- THEME VARIABLES --- */
@@ -25,20 +25,18 @@
     }
     .flex-row { display: flex; align-items: center; }
 
-    /* LAYER 1: MAP (Fixed Background) */
+    /* LAYER 1: MAP */
     #map-layer {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 1; /* Bottom Layer */
+        z-index: 1;
     }
     #map { width: 100%; height: 100%; background: #333; }
 
-    /* LAYER 2: CONTROLS (Floating above map) */
+    /* LAYER 2: CONTROLS */
     #controls-layer {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        pointer-events: none; /* Let clicks pass through to map */
-        z-index: 10;
+        pointer-events: none; z-index: 10;
     }
-    /* Re-enable pointer events for specific buttons */
     .interactive { pointer-events: auto; }
 
     /* Header */
@@ -57,7 +55,7 @@
     }
     .status-pill.active { background: var(--accent); color: #000; border-color: var(--accent); }
 
-    /* Map Toggle Button */
+    /* Buttons */
     #layer-btn {
         position: absolute; top: 70px; right: 16px;
         background: var(--panel); color: var(--text); border: 2px solid var(--border);
@@ -66,7 +64,6 @@
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
 
-    /* Floating Record Button (FAB) */
     #fab-record {
         position: absolute; bottom: 90px; right: 20px;
         width: 64px; height: 64px; border-radius: 50%; border: none;
@@ -78,41 +75,41 @@
     body.panel-minimized #fab-record { transform: scale(1); }
 
 
-    /* LAYER 3: COMPASS SHEET (Slide Up Panel) */
+    /* LAYER 3: COMPASS PANEL */
     #compass-container {
         position: fixed; bottom: 0; left: 0; width: 100%;
         background: var(--panel); 
         border-top: 1px solid var(--border);
         border-top-left-radius: 24px; border-top-right-radius: 24px;
         box-shadow: 0 -4px 30px rgba(0,0,0,0.5);
-        z-index: 20; /* Above Controls */
+        z-index: 20;
         transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1);
-        transform: translateY(0); /* Expanded */
+        transform: translateY(0);
         display: flex; flex-direction: column;
     }
     
     /* Minimized State */
     #compass-container.minimized {
-        transform: translateY(calc(100% - 64px)); /* Show top 64px */
+        transform: translateY(calc(100% - 64px));
     }
 
-    /* DRAG HANDLE */
+    /* Drag Handle */
     #drag-area {
-        width: 100%; height: 30px; display: flex; justify-content: center; align-items: center;
+        width: 100%; height: 40px; display: flex; justify-content: center; align-items: center;
         cursor: pointer; position: absolute; top: 0; left: 0; z-index: 30;
+        /* Make handle area larger for easier grabbing */
+        background: transparent;
     }
     #drag-pill { width: 40px; height: 5px; background: var(--sub); border-radius: 10px; opacity: 0.5; }
 
-    /* MINI HEADER */
+    /* Content */
     #mini-header {
         height: 64px; display: flex; align-items: center; justify-content: space-around;
-        border-bottom: 1px solid var(--border); width: 100%;
-        padding-top: 10px; box-sizing: border-box;
+        border-bottom: 1px solid var(--border); width: 100%; padding-top: 15px; box-sizing: border-box;
     }
     .mini-val { font-size: 1.2rem; font-weight: bold; color: var(--accent); font-variant-numeric: tabular-nums; }
     .mini-lbl { font-size: 0.7rem; color: var(--sub); margin-right: 6px; }
 
-    /* FULL CONTENT */
     #full-content {
         padding: 0 10px 30px 10px; 
         display: flex; flex-direction: column; align-items: center; gap: 10px;
@@ -120,7 +117,7 @@
     }
     #compass-container.minimized #full-content { opacity: 0; pointer-events: none; }
 
-    /* VISUALIZER */
+    /* Components */
     #visualizer-container { width: 150px; height: 150px; position: relative; margin-top: 10px; }
     #level-housing {
         width: 100%; height: 100%; border-radius: 50%; border: 2px solid var(--border);
@@ -133,7 +130,6 @@
     }
     #north-marker { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-size: 0.75rem; color: var(--sub); font-weight: bold; }
 
-    /* CARDS & BUTTONS */
     .data-row { display: flex; width: 100%; justify-content: center; gap: 10px; }
     .card {
         background: var(--bg); padding: 10px; border-radius: 12px; text-align: center; flex: 1;
@@ -150,8 +146,7 @@
     .btn:active { transform: scale(0.96); }
     .btn-primary { background: var(--accent); color: #000; border: none; }
 
-
-    /* LAYER 4: MODALS (Top) */
+    /* MODALS */
     .overlay {
         position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 5000;
         display: none; flex-direction: column; padding: 20px; overflow-y: auto; backdrop-filter: blur(5px);
@@ -190,11 +185,9 @@
             </div>
             <div id="mag-status" class="status-pill" onclick="openSettings()">Mag North</div>
         </div>
-
         <button id="layer-btn" class="interactive" onclick="toggleLayer()">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
         </button>
-
         <button id="fab-record" class="interactive" onclick="recordPoint()">REC</button>
     </div>
 
@@ -293,12 +286,11 @@
     let map, markers, userSpot, osmLayer, satLayer, editingId = null, tempClickLatLng = null;
 
     window.onload = () => {
-        // Simple safety load
         try {
             const s = localStorage.getItem(DB_KEY);
             if (s) db = JSON.parse(s);
             else {
-                // Attempt v10 import
+                // Restore previous ver if possible
                 const old = localStorage.getItem('brunton_db_v10');
                 if(old) db = JSON.parse(old);
                 saveDB();
@@ -316,6 +308,7 @@
     function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
     function hardReset() { localStorage.clear(); location.reload(); }
 
+    // --- UI SWIPE LOGIC (REVERSED) ---
     function initUI() {
         const handle = document.getElementById('drag-area');
         handle.addEventListener('click', togglePanel);
@@ -323,9 +316,12 @@
         handle.addEventListener('touchstart', e => { sy = e.touches[0].clientY; });
         handle.addEventListener('touchend', e => {
             if(e.changedTouches.length > 0) {
-                let diff = sy - e.changedTouches[0].clientY;
-                if (diff > 30 && !app.minimized) togglePanel();
-                if (diff < -30 && app.minimized) togglePanel();
+                let endY = e.changedTouches[0].clientY;
+                let diff = sy - endY;
+                // Swipe Down (diff is negative) -> MINIMIZE
+                if (diff < -30 && !app.minimized) togglePanel();
+                // Swipe Up (diff is positive) -> EXPAND
+                if (diff > 30 && app.minimized) togglePanel();
             }
         });
     }
@@ -343,6 +339,7 @@
         }
     }
 
+    // --- SENSORS ---
     function initSensors() {
         if ('AbsoluteOrientationSensor' in window) {
             try {
@@ -352,7 +349,6 @@
                     let nx = 2 * (q[0] * q[2] - q[3] * q[1]);
                     let ny = 2 * (q[1] * q[2] + q[3] * q[0]);
                     let nz = 1 - 2 * (q[0] * q[0] + q[1] * q[1]);
-                    
                     const ang = window.screen.orientation ? window.screen.orientation.angle : 0;
                     if(ang !== 0) {
                         const rad = -ang * Math.PI/180;
@@ -403,13 +399,24 @@
         bubble.style.transform = `translate(calc(-50% + ${bx}px), calc(-50% + ${by}px))`;
     }
 
+    // --- MAP (Smart Scaling Fix) ---
     function initMap() {
         map = L.map('map', {zoomControl:false}).setView([0,0], 2);
+        
+        // Street Map
         osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
-        satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19});
+        
+        // Satellite - SMART SCALING (Digital Zoom)
+        // maxNativeZoom: 17 means "Load level 17 tiles if user zooms deeper than 17"
+        satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxNativeZoom: 17, 
+            maxZoom: 21
+        });
+        
         osmLayer.addTo(map);
         markers = L.layerGroup().addTo(map);
         renderLogs();
+        
         navigator.geolocation.watchPosition(p => {
             app.lat = p.coords.latitude; app.lng = p.coords.longitude;
             if(!userSpot) {
@@ -427,6 +434,7 @@
     }
     function toggleLayer() { if(app.isSat) { map.removeLayer(satLayer); osmLayer.addTo(map); } else { map.removeLayer(osmLayer); satLayer.addTo(map); } app.isSat = !app.isSat; }
 
+    // --- ACTIONS ---
     function recordPoint() {
         if(!app.lat) return alert("Waiting for GPS...");
         const logs = db.projects[db.currentProject];
@@ -436,10 +444,12 @@
         });
         saveDB(); renderLogs();
         
-        // Animation & FlyTo
+        // Visual Flash
         const el = app.minimized ? document.getElementById('mini-header') : document.getElementById('full-content');
         el.style.background = "var(--border)"; setTimeout(()=>el.style.background="",150);
-        map.flyTo([app.lat, app.lng], 19);
+        
+        // Smooth FlyTo (Zoom 18 is safe)
+        map.flyTo([app.lat, app.lng], 18);
     }
 
     function createStructIcon(s, d) {
@@ -477,12 +487,8 @@
     function startEdit(id) { editingId=id; const l=db.projects[db.currentProject].find(x=>x.id===id); if(l){ document.getElementById('edit-name').value=l.name; document.getElementById('edit-note').value=l.note; document.getElementById('edit-overlay').style.display='flex'; document.getElementById('notebook-overlay').style.display='none'; } }
     function saveEdit() { const l=db.projects[db.currentProject].find(x=>x.id===editingId); if(l){ l.name=document.getElementById('edit-name').value; l.note=document.getElementById('edit-note').value; saveDB(); renderLogs(); } closeEdit(); }
     
-    // Fix for navigation
-    function closeEdit() { 
-        document.getElementById('edit-overlay').style.display='none'; 
-        // Re-open notebook if we came from there
-        document.getElementById('notebook-overlay').style.display='flex'; 
-    }
+    // Fix Nav: Return to Notebook
+    function closeEdit() { document.getElementById('edit-overlay').style.display='none'; document.getElementById('notebook-overlay').style.display='flex'; }
 
     function toggleNotebook() { const el=document.getElementById('notebook-overlay'); el.style.display=el.style.display==='flex'?'none':'flex'; if(el.style.display==='flex') renderLogs(); }
     function closePoi() { document.getElementById('poi-overlay').style.display='none'; }
