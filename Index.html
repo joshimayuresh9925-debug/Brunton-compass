@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Brunton Digital Compass</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #e74c3c;
+            --light: #ecf0f1;
+            --dark: #1a1a1a;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--dark);
+            color: var(--light);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        /* Top Section: Compass Data */
+        #readings {
+            flex: 0 0 45%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+            background: linear-gradient(145deg, #222, #111);
+            position: relative;
+        }
+        .data-row {
+            display: flex;
+            width: 100%;
+            justify-content: space-around;
+            margin-bottom: 1rem;
+        }
+        .metric {
+            text-align: center;
+        }
+        .label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+        }
+        .value {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: var(--accent);
+            font-variant-numeric: tabular-nums;
+        }
+        .unit {
+            font-size: 1rem;
+            color: #666;
+        }
+        #bubble-level {
+            width: 200px;
+            height: 20px;
+            background: #333;
+            border-radius: 10px;
+            margin-top: 1rem;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #555;
+        }
+        #bubble {
+            width: 30px;
+            height: 100%;
+            background: #2ecc71; /* Green when level */
+            border-radius: 50%;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: left 0.1s ease, background-color 0.2s;
+        }
+        
+        /* Middle: Controls */
+        #controls {
+            flex: 0 0 auto;
+            padding: 1rem;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            background: #111;
+            border-bottom: 1px solid #333;
+        }
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            flex: 1;
+        }
+        button:active { transform: scale(0.98); }
+        #btn-record { background: var(--accent); }
+        
+        /* Bottom: Map & List */
+        #bottom-panel {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+            background: #333;
+        }
+        #logs-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            max-height: 50%;
+            background: rgba(0,0,0,0.9);
+            overflow-y: auto;
+            display: none; /* Hidden by default */
+            border-top: 2px solid var(--accent);
+            z-index: 1000;
+        }
+        .log-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .log-info { font-size: 0.9rem; }
+        .log-meta { font-size: 0.75rem; color: #888; }
+        .btn-rename { 
+            padding: 5px 10px; 
+            font-size: 0.8rem; 
+            background: #555; 
+            flex: 0; 
+            margin-left: 10px;
+        }
+
+        /* Permission Modal */
+        #permission-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 9999;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: #222; padding: 2rem; border-radius: 12px; text-align: center; max-width: 80%;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="permission-modal">
+        <div class="modal-content">
+            <h2>Start Compass</h2>
+            <p>This app needs access to your device sensors (Compass) and Location (GPS).</p>
+            <button onclick="startApp()">Initialize Sensors</button>
+        </div>
+    </div>
+
+    <div id="readings">
+        <div class="data-row">
+            <div class="metric">
+                <div class="label">Strike (Azimuth)</div>
+                <div id="strike-val" class="value">---</div>
+                <div class="unit">Right Hand Rule</div>
+            </div>
+        </div>
+        <div class="data-row">
+            <div class="metric">
+                <div class="label">Dip</div>
+                <div id="dip-val" class="value">---</div>
+                <div class="unit">Degrees</div>
+            </div>
+            <div class="metric">
+                <div class="label">Direction</div>
+                <div id="dip-dir-val" class="value">---</div>
+                <div class="unit">Quadrant</div>
+            </div>
+        </div>
+        <div id="bubble-level">
+            <div id="bubble"></div>
+        </div>
+        <div style="margin-top:5px; font-size: 0.7rem; color:#666;">Tilt phone flat against rock surface</div>
+    </div>
+
+    <div id="controls">
+        <button id="btn-record">Record Reading</button>
+        <button id="btn-toggle-view" onclick="toggleLogs()">View List</button>
+    </div>
+
+    <div id="bottom-panel">
+        <div id="map"></div>
+        <div id="logs-overlay">
+            </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // --- GLOBAL STATE ---
+        let map, userMarker, readingsLayer;
+        let currentReading = { strike: 0, dip: 0, lat: null, lng: null, acc: 0 };
+        let savedReadings = JSON.parse(localStorage.getItem('brunton_readings')) || [];
+
+        // --- 1. SENSOR LOGIC (The Math) ---
+        function startApp() {
+            document.getElementById('permission-modal').style.display = 'none';
+            
+            // Request DeviceOrientation (iOS 13+ requirement, good for others too)
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation, true);
+                        } else {
+                            alert("Compass permission denied.");
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                // Non-iOS or older devices
+                window.addEventListener('deviceorientation', handleOrientation, true);
+            }
+
+            // Start Location
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(updateLocation, 
+                    err => console.warn("GPS Error:", err), 
+                    { enableHighAccuracy: true }
+                );
+            }
+            
+            initMap();
+        }
+
+        function handleOrientation(event) {
+            // Convert degrees to radians
+            const alpha = event.alpha * (Math.PI / 180); // Z axis (compass)
+            const beta = event.beta * (Math.PI / 180);   // X axis (front-back tilt)
+            const gamma = event.gamma * (Math.PI / 180); // Y axis (left-right tilt)
+
+            // Calculate Rotation Matrix (Z-X-Y order commonly used in web specs)
+            const cA = Math.cos(alpha), sA = Math.sin(alpha);
+            const cB = Math.cos(beta),  sB = Math.sin(beta);
+            const cG = Math.cos(gamma), sG = Math.sin(gamma);
+
+            // We want the phone's "Up" vector (Normal to screen) in World Coordinates.
+            // In device frame, normal is (0, 0, 1).
+            // We apply the rotation matrix R to (0,0,1).
+            // The 3rd column of the rotation matrix represents the transformed Z-axis.
+            
+            // R_zxy = R_z * R_x * R_y
+            // The Z component of the normal vector (World Z)
+            const z_world = cB * cG; 
+            
+            // The X component (World East)
+            const x_world = cA * sG - sA * sB * cG;
+            
+            // The Y component (World North)
+            const y_world = -sA * sG - cA * sB * cG;
+
+            // --- CALCULATE DIP ---
+            // Dip is angle between normal vector and vertical (World Z).
+            // Because phone back is on rock, phone normal = rock normal.
+            // If phone is flat, z_world = 1, Dip = 0.
+            // If phone is vertical, z_world = 0, Dip = 90.
+            let dipRad = Math.acos(Math.abs(z_world));
+            let dipDeg = dipRad * (180 / Math.PI);
+
+            // --- CALCULATE DIP DIRECTION (Trend) ---
+            // Azimuth of the projection of the normal vector onto the horizontal plane.
+            let dipDirRad = Math.atan2(x_world, y_world);
+            let dipDirDeg = dipDirRad * (180 / Math.PI);
+            if (dipDirDeg < 0) dipDirDeg += 360;
+
+            // --- CALCULATE STRIKE ---
+            // Right Hand Rule: Strike is 90 degrees to the left of Dip Direction?
+            // Actually standard RHR: Strike is 90 deg CCW from Dip direction (or Dip is 90 deg CW from strike).
+            // Let's use: Strike = DipDirection - 90.
+            let strikeDeg = dipDirDeg - 90;
+            if (strikeDeg < 0) strikeDeg += 360;
+
+            // Update UI
+            updateUI(strikeDeg, dipDeg, dipDirDeg);
+            
+            // Update global state for recording
+            currentReading.strike = Math.round(strikeDeg);
+            currentReading.dip = Math.round(dipDeg);
+        }
+
+        function updateUI(strike, dip, dipDir) {
+            document.getElementById('strike-val').innerText = Math.round(strike).toString().padStart(3, '0') + "°";
+            document.getElementById('dip-val').innerText = Math.round(dip) + "°";
+            
+            // Convert dip dir to cardinal (e.g., NE)
+            const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+            const ix = Math.round(dipDir / 45) % 8;
+            document.getElementById('dip-dir-val').innerText = dirs[ix];
+
+            // Bubble level visualization (using beta/gamma for simplicity of visual)
+            // A real bubble moves OPPOSITE to tilt.
+            // We clamp it to keep it inside the bar.
+            const bubble = document.getElementById('bubble');
+            const maxOffset = 85; // Half of bar width - half of bubble width
+            // Use Dip as the magnitude of "unlevelness"
+            // Ideally we want the bubble to center when dip is 0 (flat).
+            // But for a Brunton, we usually measure dip on a slanted surface.
+            // Let's make the bubble represent "Strike line levelness" (rotation around normal).
+            // Actually, for this simple UI, let's just show general flatness for calibration.
+            // Simple visual: center bubble if phone is flat.
+            let tilt = currentReading.dip;
+            if(tilt > 20) { bubble.style.backgroundColor = '#e74c3c'; } // Red if steep
+            else { bubble.style.backgroundColor = '#2ecc71'; }
+            
+            // Just center it for now as a "live" indicator
+            bubble.style.left = "50%"; 
+        }
+
+        // --- 2. LOCATION LOGIC ---
+        function updateLocation(pos) {
+            currentReading.lat = pos.coords.latitude;
+            currentReading.lng = pos.coords.longitude;
+            currentReading.acc = pos.coords.accuracy;
+
+            if (map && !userMarker) {
+                userMarker = L.marker([currentReading.lat, currentReading.lng]).addTo(map);
+                map.setView([currentReading.lat, currentReading.lng], 16);
+            } else if (userMarker) {
+                userMarker.setLatLng([currentReading.lat, currentReading.lng]);
+            }
+        }
+
+        // --- 3. MAPPING & RECORDING ---
+        function initMap() {
+            // Initialize Leaflet Map (OpenStreetMap tiles)
+            map = L.map('map').setView([0, 0], 2);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            
+            readingsLayer = L.layerGroup().addTo(map);
+            renderReadings();
+        }
+
+        document.getElementById('btn-record').addEventListener('click', () => {
+            if (currentReading.lat === null) {
+                alert("Waiting for GPS location...");
+                return;
+            }
+            
+            const id = Date.now();
+            const newRecord = {
+                id: id,
+                name: `Point #${savedReadings.length + 1}`,
+                strike: currentReading.strike,
+                dip: currentReading.dip,
+                lat: currentReading.lat,
+                lng: currentReading.lng,
+                timestamp: new Date().toLocaleString()
+            };
+
+            savedReadings.push(newRecord);
+            localStorage.setItem('brunton_readings', JSON.stringify(savedReadings));
+            renderReadings();
+            
+            // Visual feedback
+            const btn = document.getElementById('btn-record');
+            const origText = btn.innerText;
+            btn.innerText = "Saved!";
+            btn.style.backgroundColor = "#2ecc71";
+            setTimeout(() => {
+                btn.innerText = origText;
+                btn.style.backgroundColor = "";
+            }, 1000);
+        });
+
+        function renderReadings() {
+            readingsLayer.clearLayers();
+            const listContainer = document.getElementById('logs-overlay');
+            listContainer.innerHTML = '<h3>Saved Readings</h3>';
+
+            savedReadings.forEach(r => {
+                // Add to Map
+                const marker = L.circleMarker([r.lat, r.lng], {
+                    color: '#e74c3c',
+                    radius: 8,
+                    fillOpacity: 0.8
+                }).bindPopup(`<b>${r.name}</b><br>Strike: ${r.strike}°<br>Dip: ${r.dip}°`);
+                readingsLayer.addLayer(marker);
+
+                // Add to List
+                const div = document.createElement('div');
+                div.className = 'log-item';
+                div.innerHTML = `
+                    <div>
+                        <div class="log-info"><b>${r.name}</b>: S${r.strike}° / D${r.dip}°</div>
+                        <div class="log-meta">${r.timestamp}</div>
+                    </div>
+                    <button class="btn-rename" onclick="renameReading(${r.id})">Rename</button>
+                `;
+                listContainer.appendChild(div);
+            });
+        }
+
+        window.renameReading = function(id) {
+            const r = savedReadings.find(x => x.id === id);
+            if (!r) return;
+            const newName = prompt("Enter new name for this reading:", r.name);
+            if (newName) {
+                r.name = newName;
+                localStorage.setItem('brunton_readings', JSON.stringify(savedReadings));
+                renderReadings();
+            }
+        }
+
+        window.toggleLogs = function() {
+            const el = document.getElementById('logs-overlay');
+            el.style.display = el.style.display === 'block' ? 'none' : 'block';
+            const btn = document.getElementById('btn-toggle-view');
+            btn.innerText = el.style.display === 'block' ? 'Hide List' : 'View List';
+        }
+    </script>
+</body>
+</html>
