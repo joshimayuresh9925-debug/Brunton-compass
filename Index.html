@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Brunton Omni v4</title>
+<title>Brunton Omni v6</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
     :root { 
@@ -18,7 +18,7 @@
 
     /* HEADER */
     #header {
-        padding: 12px 16px; background: var(--panel); border-bottom: 1px solid #333; justify-content: space-between;
+        flex: 0 0 auto; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid #333; justify-content: space-between; z-index: 20;
     }
     .brand { font-weight: 800; font-style: italic; letter-spacing: -0.5px; font-size: 1.1rem; }
     .brand span { color: var(--accent); }
@@ -28,11 +28,22 @@
     }
     .status-pill.active { background: var(--accent); color: #000; }
 
-    /* MAIN READOUT */
-    #main-readout {
-        flex: 0 0 auto; padding: 15px 10px; background: var(--bg);
-        display: flex; flex-direction: column; align-items: center; gap: 10px;
+    /* COMPASS PANEL (Collapsible) */
+    #compass-panel {
+        flex: 0 0 auto; background: var(--bg); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden; position: relative; z-index: 10;
+        border-bottom: 1px solid #333;
     }
+    #compass-content {
+        padding: 15px 10px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+        opacity: 1; transition: opacity 0.2s;
+    }
+    
+    /* Minimized State Classes */
+    #compass-panel.minimized { flex-basis: 0 !important; padding: 0; border-bottom: none; }
+    #compass-panel.minimized #compass-content { opacity: 0; pointer-events: none; }
+
+    /* Visualizer */
     #visualizer-container { width: 160px; height: 160px; position: relative; margin-bottom: 5px; }
     #level-housing {
         width: 100%; height: 100%; border-radius: 50%; border: 2px solid #333;
@@ -53,10 +64,9 @@
     .card-label { font-size: 0.65rem; color: #888; letter-spacing: 1px; margin-bottom: 2px; text-transform: uppercase; }
     .card-val { font-size: 2.5rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; line-height: 1; }
 
-    /* CONTROLS */
-    #controls {
-        padding: 10px 15px; display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 8px;
-        background: var(--bg); border-bottom: 1px solid #333;
+    /* CONTROLS (In Compass Panel) */
+    #panel-controls {
+        width: 100%; padding: 0 10px; display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 8px; margin-top: 10px;
     }
     .btn {
         border: none; padding: 12px 0; border-radius: 8px; font-weight: 700; cursor: pointer; 
@@ -65,14 +75,48 @@
     .btn:active { transform: scale(0.97); }
     .btn-primary { background: var(--accent); color: #000; }
 
-    /* MAP */
+    /* DRAG HANDLE */
+    #drag-handle {
+        width: 100%; height: 24px; background: var(--panel); display: flex; justify-content: center; align-items: center;
+        cursor: pointer; border-top: 1px solid #222; z-index: 15;
+    }
+    #handle-bar { width: 40px; height: 4px; background: #555; border-radius: 2px; }
+
+    /* MINI HEADER (Visible when minimized) */
+    #mini-header {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+        display: flex; align-items: center; justify-content: space-around; background: var(--bg);
+        opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 20;
+    }
+    #compass-panel.minimized #mini-header { opacity: 1; pointer-events: auto; }
+    .mini-val { font-size: 1.1rem; font-weight: bold; color: var(--accent); }
+    .mini-lbl { font-size: 0.7rem; color: #888; margin-right: 5px; }
+
+    /* MAP & FLOATING CONTROLS */
     #workspace { flex: 1; position: relative; width: 100%; }
     #map { width: 100%; height: 100%; z-index: 1; }
-
-    /* LEAFLET CUSTOM ICON CSS */
     .geo-symbol { background: transparent; border: none; }
 
-    /* MODALS */
+    /* Floating Action Buttons on Map */
+    .fab-group { position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 15px; z-index: 400; }
+    .fab {
+        width: 56px; height: 56px; border-radius: 50%; border: none;
+        background: var(--accent); color: #000; font-weight: bold; font-size: 0.8rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.5); cursor: pointer; display: flex; justify-content: center; align-items: center;
+        transform: scale(0); transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    /* Only show FAB when compass is minimized */
+    #compass-panel.minimized ~ #workspace .fab { transform: scale(1); }
+    
+    /* Layer Toggle Btn */
+    #layer-btn {
+        position: absolute; top: 20px; right: 20px; z-index: 400;
+        background: var(--panel); color: white; border: 2px solid #444;
+        width: 40px; height: 40px; border-radius: 8px; font-size: 1.2rem;
+        display: flex; justify-content: center; align-items: center; cursor: pointer;
+    }
+
+    /* MODALS (Same as v5) */
     .overlay {
         position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 9999;
         display: none; flex-direction: column; padding: 20px; overflow-y: auto; backdrop-filter: blur(5px);
@@ -80,25 +124,17 @@
     .overlay-content { background: var(--panel); padding: 20px; border-radius: 15px; border: 1px solid #444; }
     .overlay-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
     .overlay h2 { margin: 0; color: var(--accent); font-size: 1.2rem; }
-    
     input, textarea { 
         width: 100%; padding: 12px; background: #000; border: 1px solid #444; 
         color: white; border-radius: 6px; box-sizing: border-box; font-size: 1rem; margin-bottom: 10px; 
     }
-    textarea { resize: vertical; min-height: 60px; font-family: sans-serif; }
-
     .log-item {
         background: var(--panel); padding: 12px; margin-bottom: 8px; border-radius: 8px;
         display: flex; justify-content: space-between; align-items: flex-start; border-left: 4px solid #555;
     }
     .log-item.type-geo { border-left-color: var(--accent); }
     .log-item.type-poi { border-left-color: var(--poi); }
-    
-    .log-actions { display: flex; gap: 8px; margin-top: 8px; }
-    .btn-sm { padding: 6px 12px; font-size: 0.75rem; border-radius: 4px; }
-    .btn-edit { background: #444; color: white; }
-    .btn-del { background: var(--danger); color: white; }
-    .note-text { font-size: 0.8rem; color: #aaa; font-style: italic; margin-top: 4px; }
+    .btn-sm { padding: 6px 12px; font-size: 0.75rem; border-radius: 4px; background: #444; color: white; border:none;}
 </style>
 </head>
 <body>
@@ -108,34 +144,56 @@
         <div id="mag-status" class="status-pill" onclick="openSettings()">Mag North</div>
     </div>
 
-    <div id="main-readout">
-        <div id="visualizer-container">
-            <div id="level-housing">
-                <div id="north-marker">N</div>
-                <div id="level-bubble"></div>
+    <div id="compass-panel">
+        <div id="mini-header">
+            <div class="flex-row"><span class="mini-lbl">STR</span><span id="mini-s" class="mini-val">000</span></div>
+            <div class="flex-row"><span class="mini-lbl">DIP</span><span id="mini-d" class="mini-val">00</span></div>
+            <div style="font-size:0.7rem; color:#888;">(Swipe Down to Expand)</div>
+        </div>
+
+        <div id="compass-content">
+            <div id="visualizer-container">
+                <div id="level-housing">
+                    <div id="north-marker">N</div>
+                    <div id="level-bubble"></div>
+                </div>
+            </div>
+            <div class="data-row">
+                <div class="card">
+                    <div class="card-label">Strike</div>
+                    <div id="val-strike" class="card-val">---</div>
+                </div>
+                <div class="card">
+                    <div class="card-label">Dip</div>
+                    <div id="val-dip" class="card-val">---</div>
+                </div>
+            </div>
+            <div style="font-size: 0.8rem; color: #888;">Dir: <span id="val-dipdir" style="color:white; font-weight:bold;">---</span></div>
+            
+            <div id="panel-controls">
+                <button class="btn btn-primary" onclick="recordPoint()">RECORD</button>
+                <button class="btn" onclick="toggleNotebook()">DATA</button>
+                <button class="btn" onclick="openSettings()">CONFIG</button>
             </div>
         </div>
-        <div class="data-row">
-            <div class="card">
-                <div class="card-label">Strike</div>
-                <div id="val-strike" class="card-val">---</div>
-            </div>
-            <div class="card">
-                <div class="card-label">Dip</div>
-                <div id="val-dip" class="card-val">---</div>
-            </div>
-        </div>
-        <div style="font-size: 0.8rem; color: #888;">Dir: <span id="val-dipdir" style="color:white; font-weight:bold;">---</span></div>
     </div>
 
-    <div id="controls">
-        <button class="btn btn-primary" onclick="recordPoint()">RECORD</button>
-        <button class="btn" onclick="toggleNotebook()">NOTEBOOK</button>
-        <button class="btn" onclick="openSettings()">CONFIG</button>
+    <div id="drag-handle">
+        <div id="handle-bar"></div>
     </div>
 
     <div id="workspace">
         <div id="map"></div>
+        
+        <button id="layer-btn" onclick="toggleLayer()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+        </button>
+
+        <div class="fab-group">
+            <button class="fab" onclick="recordPoint()">REC</button>
+        </div>
     </div>
 
     <div id="edit-overlay" class="overlay" style="justify-content:center;">
@@ -170,7 +228,7 @@
             </div>
             <div style="display:flex; gap:10px; margin-bottom:15px;">
                 <button class="btn" style="flex:1; background:#333;" onclick="exportCSV()">CSV</button>
-                <button class="btn" style="flex:1; background:#333;" onclick="exportKML()">KML (Earth)</button>
+                <button class="btn" style="flex:1; background:#333;" onclick="exportKML()">KML</button>
             </div>
             <div id="logs-list"></div>
         </div>
@@ -200,20 +258,50 @@
         strike: 0, dip: 0, dipDir: 0,
         lat: null, lng: null,
         declination: parseFloat(localStorage.getItem('brunton_dec')) || 0,
-        logs: JSON.parse(localStorage.getItem('brunton_logs_v4')) || []
+        logs: JSON.parse(localStorage.getItem('brunton_logs_v6')) || [],
+        isSat: false,
+        minimized: false
     };
-    let map, markers, userSpot;
-    let editingId = null;
-    let tempClickLatLng = null;
+    let map, markers, userSpot, osmLayer, satLayer;
+    let editingId = null, tempClickLatLng = null;
 
     // --- STARTUP ---
     window.onload = () => {
         initMap();
         initSensors();
+        initUI();
         updateDecDisplay();
     };
 
-    // --- SENSORS ---
+    // --- UI INTERACTION (SWIPE/TAP) ---
+    function initUI() {
+        const handle = document.getElementById('drag-handle');
+        
+        // Click Toggle
+        handle.addEventListener('click', togglePanel);
+
+        // Simple Touch Swipe Detection
+        let startY = 0;
+        handle.addEventListener('touchstart', e => { startY = e.touches[0].clientY; });
+        handle.addEventListener('touchend', e => {
+            let endY = e.changedTouches[0].clientY;
+            let diff = startY - endY;
+            if (diff > 30 && !app.minimized) togglePanel(); // Swipe Up -> Minimize
+            if (diff < -30 && app.minimized) togglePanel(); // Swipe Down -> Expand
+        });
+    }
+
+    function togglePanel() {
+        const panel = document.getElementById('compass-panel');
+        app.minimized = !app.minimized;
+        if (app.minimized) panel.classList.add('minimized');
+        else panel.classList.remove('minimized');
+        
+        // Trigger map resize after transition
+        setTimeout(() => map.invalidateSize(), 350);
+    }
+
+    // --- SENSOR ENGINE ---
     function initSensors() {
         if ('AbsoluteOrientationSensor' in window) {
             try {
@@ -223,7 +311,7 @@
                     let nx = 2 * (q[0] * q[2] - q[3] * q[1]);
                     let ny = 2 * (q[1] * q[2] + q[3] * q[0]);
                     let nz = 1 - 2 * (q[0] * q[0] + q[1] * q[1]);
-                    calculateAttitude(nx, ny, nz);
+                    calcAttitude(nx, ny, nz);
                 });
                 s.start();
                 return;
@@ -232,21 +320,17 @@
         if (window.DeviceOrientationEvent) {
             window.addEventListener('deviceorientation', (e) => {
                 let alpha = e.webkitCompassHeading || e.alpha;
-                if (!alpha) return;
+                if (!alpha && alpha !== 0) return;
                 const d2r = Math.PI / 180;
-                const a = alpha * d2r, b = e.beta * d2r, g = e.gamma * d2r;
-                const cA = Math.cos(a), sA = Math.sin(a);
-                const cB = Math.cos(b), sB = Math.sin(b);
-                const cG = Math.cos(g), sG = Math.sin(g);
-                let nx = cA * sG - sA * sB * cG;
-                let ny = -sA * sG - cA * sB * cG;
-                let nz = cB * cG;
-                calculateAttitude(nx, ny, nz);
+                let nx = Math.cos(alpha*d2r)*Math.sin(e.gamma*d2r) - Math.sin(alpha*d2r)*Math.sin(e.beta*d2r)*Math.cos(e.gamma*d2r);
+                let ny = -Math.sin(alpha*d2r)*Math.sin(e.gamma*d2r) - Math.cos(alpha*d2r)*Math.sin(e.beta*d2r)*Math.cos(e.gamma*d2r);
+                let nz = Math.cos(e.beta*d2r)*Math.cos(e.gamma*d2r);
+                calcAttitude(nx, ny, nz);
             }, true);
         }
     }
 
-    function calculateAttitude(nx, ny, nz) {
+    function calcAttitude(nx, ny, nz) {
         let dip = Math.acos(Math.abs(nz)) * (180 / Math.PI);
         let azimuth = Math.atan2(nx, ny) * (180 / Math.PI);
         if (azimuth < 0) azimuth += 360;
@@ -254,17 +338,24 @@
         let trueDipDir = (dipDirRaw + app.declination) % 360;
         if(trueDipDir < 0) trueDipDir += 360;
         let strike = (trueDipDir - 90 + 360) % 360;
-        updateUI(strike, dip, trueDipDir, nx, ny);
+        updateReadout(strike, dip, trueDipDir, nx, ny);
     }
 
-    function updateUI(s, d, dd, nx, ny) {
+    function updateReadout(s, d, dd, nx, ny) {
         app.strike = Math.round(s);
         app.dip = Math.round(d);
         app.dipDir = Math.round(dd);
+        
+        // Big UI
         document.getElementById('val-strike').innerText = app.strike + "°";
         document.getElementById('val-dip').innerText = app.dip + "°";
         document.getElementById('val-dipdir').innerText = app.dipDir + "°";
         
+        // Mini Header UI
+        document.getElementById('mini-s').innerText = app.strike + "°";
+        document.getElementById('mini-d').innerText = app.dip + "°";
+
+        // Bubble
         const bubble = document.getElementById('level-bubble');
         let bx = -nx * 90, by = ny * 90;
         let dist = Math.sqrt(bx*bx + by*by);
@@ -272,7 +363,6 @@
         bubble.style.transform = `translate(calc(-50% + ${bx}px), calc(-50% + ${by}px))`;
     }
 
-    // --- RECORDING ---
     function recordPoint() {
         if(!app.lat) { alert("Waiting for GPS..."); return; }
         const rec = {
@@ -283,17 +373,24 @@
             t: new Date().toLocaleString()
         };
         app.logs.unshift(rec);
-        saveLogs(); renderLogs(); flashUI();
-    }
-    function flashUI() {
-        const p = document.getElementById('main-readout');
-        p.style.background = "#222"; setTimeout(()=>p.style.background="",100);
+        saveLogs(); renderLogs(); 
+        
+        // Flash Effect (Works on both Big and Mini headers)
+        const target = app.minimized ? document.getElementById('mini-header') : document.getElementById('compass-content');
+        target.style.backgroundColor = "#333"; setTimeout(()=>target.style.backgroundColor="",150);
     }
 
-    // --- MAPPING & SYMBOLS ---
+    // --- MAP SYSTEM ---
     function initMap() {
         map = L.map('map', {zoomControl:false}).setView([0,0], 2);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        
+        // Layers
+        osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19});
+        satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Esri', maxZoom: 19
+        });
+        
+        osmLayer.addTo(map);
         markers = L.layerGroup().addTo(map);
         
         navigator.geolocation.watchPosition(p => {
@@ -312,11 +409,14 @@
         });
     }
 
-    // Generate Structural Symbol (SVG)
+    function toggleLayer() {
+        if(app.isSat) { map.removeLayer(satLayer); osmLayer.addTo(map); }
+        else { map.removeLayer(osmLayer); satLayer.addTo(map); }
+        app.isSat = !app.isSat;
+    }
+
+    // --- SYMBOLS & RENDERING ---
     function createStructIcon(strike, dip) {
-        // We draw a vertical line (North strike), and a tick to the right (East dip).
-        // This is Strike 0, Dip Dir 90 (RHR).
-        // Then we rotate the whole Div by the Strike Angle.
         const size = 50;
         return L.divIcon({
             className: 'geo-symbol',
@@ -326,13 +426,12 @@
                         <line x1="50" y1="10" x2="50" y2="90" stroke="#ff9f0a" stroke-width="6" stroke-linecap="round" />
                         <line x1="50" y1="50" x2="80" y2="50" stroke="#ff9f0a" stroke-width="6" stroke-linecap="round" />
                     </svg>
-                    <div style="position:absolute; left: 80%; top: 35%; color: #ff9f0a; font-weight:bold; font-size:14px; text-shadow: 0 0 2px black;">
-                        ${dip}
+                    <div style="position:absolute; left: 80%; top: 30%; width:40px;">
+                        <div style="transform: rotate(-${strike}deg); color: #ff9f0a; font-weight:bold; font-size:14px; text-shadow: 0 0 2px black; text-align:center;">${dip}</div>
                     </div>
                 </div>
             `,
-            iconSize: [size, size],
-            iconAnchor: [size/2, size/2] // Center pivot
+            iconSize: [size, size], iconAnchor: [size/2, size/2]
         });
     }
 
@@ -342,114 +441,80 @@
         list.innerHTML = "";
         
         app.logs.forEach(l => {
-            // MAP MARKER
             if(l.type === 'poi') {
                 L.circleMarker([l.lat, l.lng], {color: 'var(--poi)', radius: 6})
                  .bindPopup(`<b>${l.name}</b><br>${l.note}`).addTo(markers);
             } else {
-                // Structural Symbol
                 L.marker([l.lat, l.lng], { icon: createStructIcon(l.s, l.d) })
-                 .bindPopup(`<b>${l.name}</b><br>Strike: ${l.s}<br>Dip: ${l.d}`).addTo(markers);
+                 .bindPopup(`<b>${l.name}</b><br>S:${l.s} D:${l.d}`).addTo(markers);
             }
             
-            // LIST ITEM
             const div = document.createElement('div');
             div.className = `log-item type-${l.type}`;
-            let dataDisplay = l.type === 'poi' 
-                ? `<span style="color:var(--poi)">POI (No Data)</span>` 
-                : `<span style="color:var(--accent)">S${l.s}° / D${l.d}°</span>`;
+            let disp = l.type === 'poi' ? `<span style="color:var(--poi)">POI</span>` : `<span style="color:var(--accent)">S${l.s}/D${l.d}</span>`;
             div.innerHTML = `
                 <div style="flex:1;">
                     <div style="font-weight:bold; color:white;">${l.name}</div>
-                    <div style="font-size:0.9rem;">${dataDisplay}</div>
+                    <div style="font-size:0.9rem;">${disp}</div>
                     ${l.note ? `<div class="note-text">"${l.note}"</div>` : ''}
                     <div style="font-size:0.7rem; color:#666; margin-top:4px;">${l.t}</div>
                     <div class="log-actions">
-                        <button class="btn-sm btn-edit" onclick="startEdit(${l.id})">EDIT</button>
-                        <button class="btn-sm btn-del" onclick="deleteLog(${l.id})">DEL</button>
+                        <button class="btn-sm" onclick="startEdit(${l.id})">EDIT</button>
+                        <button class="btn-sm" style="background:var(--danger)" onclick="deleteLog(${l.id})">DEL</button>
                     </div>
-                </div>
-            `;
+                </div>`;
             list.appendChild(div);
         });
     }
 
-    // --- DATA MGMT ---
-    function saveLogs() { localStorage.setItem('brunton_logs_v4', JSON.stringify(app.logs)); }
+    // --- DATA MGMT (Standard) ---
+    function saveLogs() { localStorage.setItem('brunton_logs_v6', JSON.stringify(app.logs)); }
     function deleteLog(id) { if(confirm("Delete?")) { app.logs = app.logs.filter(x => x.id !== id); saveLogs(); renderLogs(); }}
     
-    // POI
     function savePoi() {
-        const rec = {
-            id: Date.now(), type: 'poi',
-            name: document.getElementById('poi-name').value,
-            note: document.getElementById('poi-note').value,
-            s: '', d: '', dd: '', lat: tempClickLatLng.lat, lng: tempClickLatLng.lng,
-            t: new Date().toLocaleString()
-        };
-        app.logs.unshift(rec); saveLogs(); renderLogs(); closePoi();
+        app.logs.unshift({
+            id: Date.now(), type: 'poi', name: document.getElementById('poi-name').value, 
+            note: document.getElementById('poi-note').value, lat: tempClickLatLng.lat, lng: tempClickLatLng.lng, t: new Date().toLocaleString()
+        });
+        saveLogs(); renderLogs(); closePoi();
     }
     function closePoi() { document.getElementById('poi-overlay').style.display = 'none'; }
 
-    // EDIT
     function startEdit(id) {
-        editingId = id;
-        const item = app.logs.find(l => l.id === id);
-        if(!item) return;
-        document.getElementById('edit-name').value = item.name;
-        document.getElementById('edit-note').value = item.note || "";
-        document.getElementById('edit-overlay').style.display = 'flex';
-        toggleNotebook();
+        editingId = id; const l = app.logs.find(x => x.id === id);
+        if(!l) return;
+        document.getElementById('edit-name').value = l.name; document.getElementById('edit-note').value = l.note||"";
+        document.getElementById('edit-overlay').style.display = 'flex'; toggleNotebook();
     }
     function saveEdit() {
-        const item = app.logs.find(l => l.id === editingId);
-        if(item) {
-            item.name = document.getElementById('edit-name').value;
-            item.note = document.getElementById('edit-note').value;
-            saveLogs(); renderLogs();
-        }
+        const l = app.logs.find(x => x.id === editingId);
+        if(l) { l.name = document.getElementById('edit-name').value; l.note = document.getElementById('edit-note').value; saveLogs(); renderLogs(); }
         closeEdit(); toggleNotebook();
     }
     function closeEdit() { document.getElementById('edit-overlay').style.display = 'none'; }
-
-    // EXPORT
     function toggleNotebook() {
         const el = document.getElementById('notebook-overlay');
-        el.style.display = el.style.display === 'flex' ? 'none' : 'flex';
-        if(el.style.display === 'flex') renderLogs();
+        el.style.display = el.style.display==='flex'?'none':'flex';
+        if(el.style.display==='flex') renderLogs();
     }
 
+    // --- EXPORT ---
     function exportCSV() {
-        let csv = "Type,Name,Note,Strike,Dip,DipDir,Lat,Lng,Time\n" + 
-            app.logs.map(l => `${l.type},"${l.name}","${l.note}",${l.s},${l.d},${l.dd},${l.lat},${l.lng},"${l.t}"`).join('\n');
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'})); a.download = "Brunton_Data.csv"; a.click();
+        let csv = "Type,Name,Note,Strike,Dip,DipDir,Lat,Lng,Time\n" + app.logs.map(l => `${l.type},"${l.name}","${l.note}",${l.s},${l.d},${l.dd},${l.lat},${l.lng},"${l.t}"`).join('\n');
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'})); a.download = "Brunton_Data.csv"; a.click();
     }
-
     function exportKML() {
-        let kml = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-<Document>
-    <name>Brunton Field Data</name>`;
-        
+        let kml = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Brunton Data</name>
+        <Style id="struct"><IconStyle><scale>1.2</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/arrow.png</href></Icon></IconStyle></Style>`;
         app.logs.forEach(l => {
-            let desc = l.type === 'poi' ? `Note: ${l.note}` : `Strike: ${l.s}\nDip: ${l.d}\nDip Dir: ${l.dd}\nNote: ${l.note}`;
-            kml += `
-    <Placemark>
-        <name>${l.name}</name>
-        <description>${desc}</description>
-        <Point><coordinates>${l.lng},${l.lat},0</coordinates></Point>
-    </Placemark>`;
+            if (l.type === 'poi') kml += `<Placemark><name>${l.name}</name><description>${l.note}</description><Point><coordinates>${l.lng},${l.lat},0</coordinates></Point></Placemark>`;
+            else kml += `<Placemark><name>${l.name}</name><description>S:${l.s} D:${l.d}\n${l.note}</description><styleUrl>#struct</styleUrl><Style><IconStyle><heading>${l.dd}</heading></IconStyle></Style><Point><coordinates>${l.lng},${l.lat},0</coordinates></Point></Placemark>`;
         });
-
-        kml += `\n</Document>\n</kml>`;
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([kml], {type:'application/vnd.google-earth.kml+xml'}));
-        a.download = "Brunton_Field_Data.kml";
-        a.click();
+        kml += `</Document></kml>`;
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([kml], {type:'application/vnd.google-earth.kml+xml'})); a.download = "Brunton_Data.kml"; a.click();
     }
 
-    // SETTINGS
+    // --- SETTINGS ---
     function openSettings() { document.getElementById('settings-overlay').style.display = 'flex'; document.getElementById('inp-dec').value = app.declination; }
     function closeSettings() { 
         document.getElementById('settings-overlay').style.display = 'none';
