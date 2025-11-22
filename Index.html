@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Brunton Omni v13</title>
+<title>Brunton Omni v14</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
     /* --- THEME VARIABLES --- */
@@ -25,18 +25,10 @@
     }
     .flex-row { display: flex; align-items: center; }
 
-    /* MAP LAYER */
-    #map-layer {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 1;
-    }
+    /* LAYERS */
+    #map-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
     #map { width: 100%; height: 100%; background: #333; }
-
-    /* CONTROLS LAYER */
-    #controls-layer {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        pointer-events: none; z-index: 10;
-    }
+    #controls-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
     .interactive { pointer-events: auto; }
 
     /* Header */
@@ -55,7 +47,7 @@
     }
     .status-pill.active { background: var(--accent); color: #000; border-color: var(--accent); }
 
-    /* Map Buttons */
+    /* Buttons */
     #layer-btn {
         position: absolute; top: 70px; right: 16px;
         background: var(--panel); color: var(--text); border: 2px solid var(--border);
@@ -63,7 +55,6 @@
         display: flex; justify-content: center; align-items: center; cursor: pointer;
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
-
     #fab-record {
         position: absolute; bottom: 90px; right: 20px;
         width: 64px; height: 64px; border-radius: 50%; border: none;
@@ -77,14 +68,11 @@
     /* COMPASS PANEL */
     #compass-container {
         position: fixed; bottom: 0; left: 0; width: 100%;
-        background: var(--panel); 
-        border-top: 1px solid var(--border);
+        background: var(--panel); border-top: 1px solid var(--border);
         border-top-left-radius: 24px; border-top-right-radius: 24px;
-        box-shadow: 0 -4px 30px rgba(0,0,0,0.5);
-        z-index: 20;
+        box-shadow: 0 -4px 30px rgba(0,0,0,0.5); z-index: 20;
         transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1);
-        transform: translateY(0); /* Expanded */
-        display: flex; flex-direction: column;
+        transform: translateY(0); display: flex; flex-direction: column;
     }
     #compass-container.minimized { transform: translateY(calc(100% - 64px)); }
 
@@ -102,24 +90,49 @@
     .mini-lbl { font-size: 0.7rem; color: var(--sub); margin-right: 6px; }
 
     #full-content {
-        padding: 0 10px 30px 10px; 
-        display: flex; flex-direction: column; align-items: center; gap: 10px;
+        padding: 0 10px 30px 10px; display: flex; flex-direction: column; align-items: center; gap: 10px;
         opacity: 1; transition: opacity 0.2s;
     }
     #compass-container.minimized #full-content { opacity: 0; pointer-events: none; }
 
-    #visualizer-container { width: 150px; height: 150px; position: relative; margin-top: 10px; }
+    /* VISUALIZER (NEW STRUCTURE) */
+    #visualizer-container { width: 180px; height: 180px; position: relative; margin-top: 10px; }
+    
+    /* The fixed circle boundary */
     #level-housing {
         width: 100%; height: 100%; border-radius: 50%; border: 2px solid var(--border);
-        background: radial-gradient(circle, var(--panel) 0%, var(--bg) 100%); position: relative; overflow: hidden;
+        background: radial-gradient(circle, var(--panel) 0%, var(--bg) 100%); 
+        position: relative; overflow: hidden;
     }
+
+    /* The Compass Rose (Rotates with North) */
+    #compass-rose {
+        width: 100%; height: 100%; position: absolute; top: 0; left: 0;
+        transition: transform 0.1s linear; /* Smooth rotation */
+    }
+    #north-marker { 
+        position: absolute; top: 10px; left: 50%; transform: translateX(-50%); 
+        font-size: 0.9rem; color: var(--danger); font-weight: 900; 
+    }
+    #south-marker { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); font-size: 0.7rem; color: var(--sub); }
+    #east-marker { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); font-size: 0.7rem; color: var(--sub); }
+    #west-marker { position: absolute; top: 50%; left: 10px; transform: translateY(-50%); font-size: 0.7rem; color: var(--sub); }
+
+    /* The Bubble (Moves with Tilt) */
     #level-bubble {
         width: 30px; height: 30px; background: var(--accent); border-radius: 50%;
         position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
         box-shadow: 0 0 10px rgba(0,0,0,0.3); transition: transform 0.1s linear;
+        border: 2px solid rgba(255,255,255,0.2);
     }
-    #north-marker { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-size: 0.75rem; color: var(--sub); font-weight: bold; }
+    
+    /* Center Crosshair */
+    #crosshair {
+        position: absolute; top: 50%; left: 50%; width: 10px; height: 10px;
+        border: 2px solid var(--sub); border-radius: 50%; transform: translate(-50%, -50%); opacity: 0.5;
+    }
 
+    /* CARDS & BUTTONS */
     .data-row { display: flex; width: 100%; justify-content: center; gap: 10px; }
     .card {
         background: var(--bg); padding: 10px; border-radius: 12px; text-align: center; flex: 1;
@@ -149,7 +162,6 @@
         width: 100%; padding: 14px; background: var(--bg); border: 1px solid var(--border); 
         color: var(--text); border-radius: 8px; box-sizing: border-box; font-size: 1rem; margin-bottom: 10px; 
     }
-    
     .log-item {
         background: var(--bg); padding: 12px; margin-bottom: 8px; border-radius: 10px;
         display: flex; justify-content: space-between; align-items: flex-start; border: 1px solid var(--border); border-left-width: 4px;
@@ -181,19 +193,31 @@
 
     <div id="compass-container">
         <div id="drag-area"><div id="drag-pill"></div></div>
+        
         <div id="mini-header">
             <div class="flex-row"><span class="mini-lbl">STR</span><span id="mini-s" class="mini-val">000</span></div>
             <div class="flex-row"><span class="mini-lbl">DIP</span><span id="mini-d" class="mini-val">00</span></div>
         </div>
+
         <div id="full-content">
             <div id="visualizer-container">
-                <div id="level-housing"><div id="north-marker">N</div><div id="level-bubble"></div></div>
+                <div id="level-housing">
+                    <div id="compass-rose">
+                        <div id="north-marker">N</div>
+                        <div id="south-marker">S</div>
+                        <div id="east-marker">E</div>
+                        <div id="west-marker">W</div>
+                    </div>
+                    <div id="crosshair"></div>
+                    <div id="level-bubble"></div>
+                </div>
             </div>
             <div class="data-row">
                 <div class="card"><div class="card-label">Strike</div><div id="val-strike" class="card-val">---</div></div>
                 <div class="card"><div class="card-label">Dip</div><div id="val-dip" class="card-val">---</div></div>
             </div>
             <div style="font-size: 0.8rem; color: var(--sub);">Dip Direction: <span id="val-dipdir" style="color:var(--text); font-weight:bold;">---</span></div>
+            
             <div class="btn-grid">
                 <button class="btn btn-primary" onclick="recordPoint()">RECORD</button>
                 <button class="btn" onclick="toggleNotebook()">DATA</button>
@@ -256,9 +280,9 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    const DB_KEY = 'brunton_db_v13';
-    let db = { version: 13, settings: { theme: 'dark', declination: 0 }, projects: { 'Default': [] }, currentProject: 'Default' };
-    let app = { strike: 0, dip: 0, dipDir: 0, lat: null, lng: null, minimized: false, isSat: false };
+    const DB_KEY = 'brunton_db_v14';
+    let db = { version: 14, settings: { theme: 'dark', declination: 0 }, projects: { 'Default': [] }, currentProject: 'Default' };
+    let app = { strike: 0, dip: 0, dipDir: 0, heading: 0, lat: null, lng: null, minimized: false, isSat: false };
     let map, markers, userSpot, osmLayer, satLayer, editingId = null, tempClickLatLng = null;
 
     window.onload = () => {
@@ -266,8 +290,7 @@
             const s = localStorage.getItem(DB_KEY);
             if (s) db = JSON.parse(s);
             else {
-                // Migration
-                const old = localStorage.getItem('brunton_db_v11');
+                const old = localStorage.getItem('brunton_db_v13');
                 if(old) db = JSON.parse(old);
                 saveDB();
             }
@@ -284,7 +307,7 @@
     function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
     function hardReset() { localStorage.clear(); location.reload(); }
 
-    // --- SMART UI SWIPE & MAP CENTERING ---
+    // --- UI & MAP LOGIC ---
     function initUI() {
         const handle = document.getElementById('drag-area');
         handle.addEventListener('click', togglePanel);
@@ -292,11 +315,8 @@
         handle.addEventListener('touchstart', e => { sy = e.touches[0].clientY; });
         handle.addEventListener('touchend', e => {
             if(e.changedTouches.length > 0) {
-                let endY = e.changedTouches[0].clientY;
-                let diff = sy - endY;
-                // Swipe DOWN (Negative Diff) -> MINIMIZE
+                let diff = sy - e.changedTouches[0].clientY;
                 if (diff < -30 && !app.minimized) togglePanel();
-                // Swipe UP (Positive Diff) -> EXPAND
                 if (diff > 30 && app.minimized) togglePanel();
             }
         });
@@ -313,93 +333,128 @@
             panel.classList.remove('minimized');
             body.classList.remove('panel-minimized');
         }
-        // Trigger Smart Map Re-Center
         centerMapOnUser();
     }
 
     function centerMapOnUser() {
         if(app.lat === null || app.lng === null) return;
-        
-        // If Expanded, shift map center down by 150px so user spot appears higher up (visible)
-        // If Minimized, shift is 0
-        const offset = app.minimized ? 0 : 150;
-        
-        // Leaflet magic to shift center relative to viewport
+        const offset = app.minimized ? 0 : 150; // Shift map so user is visible above panel
         const currentZoom = map.getZoom();
         const userPoint = map.project([app.lat, app.lng], currentZoom);
         const newCenterPoint = userPoint.add([0, offset]); 
         const newCenterLatLng = map.unproject(newCenterPoint, currentZoom);
-        
         map.flyTo(newCenterLatLng, currentZoom, { animate: true, duration: 0.5 });
     }
 
-    // --- SENSORS ---
+    // --- SENSORS (UPDATED FOR COMPASS ROSE) ---
     function initSensors() {
+        // 1. AbsoluteOrientationSensor (Pro)
         if ('AbsoluteOrientationSensor' in window) {
             try {
                 const s = new AbsoluteOrientationSensor({ frequency: 60, referenceFrame: 'device' });
                 s.addEventListener('reading', () => {
                     const q = s.quaternion;
+                    // Normal Vector (for Dip/Strike)
                     let nx = 2 * (q[0] * q[2] - q[3] * q[1]);
                     let ny = 2 * (q[1] * q[2] + q[3] * q[0]);
                     let nz = 1 - 2 * (q[0] * q[0] + q[1] * q[1]);
+                    
+                    // Landscape Compensation
                     const ang = window.screen.orientation ? window.screen.orientation.angle : 0;
                     if(ang !== 0) {
                         const rad = -ang * Math.PI/180;
                         const c = Math.cos(rad), sn = Math.sin(rad);
-                        const rx = nx * c - ny * sn, ry = nx * sn + ny * c;
+                        const rx = nx * c - ny * sn;
+                        const ry = nx * sn + ny * c;
                         nx = rx; ny = ry;
                     }
-                    calcAttitude(nx, ny, nz);
+                    
+                    // Calculate Heading (Yaw) for Compass Rose
+                    // Formula to extract Yaw from Quaternion [x,y,z,w]
+                    // yaw = atan2(2(wy + zx), 1 - 2(y^2 + z^2))
+                    // Note: Browser quaternion order is [x, y, z, w]
+                    let headingRad = Math.atan2(2*(q[3]*q[2] + q[0]*q[1]), 1 - 2*(q[1]*q[1] + q[2]*q[2]));
+                    let headingDeg = headingRad * (180/Math.PI);
+                    // Adjust for screen rotation
+                    headingDeg += ang;
+                    if(headingDeg < 0) headingDeg += 360;
+                    
+                    // Android AOS points North at 0.
+                    // We invert direction for the Ring rotation (Ring needs to turn Left when Phone turns Right)
+                    
+                    processData(nx, ny, nz, headingDeg);
                 });
                 s.start(); return;
             } catch(e){}
         }
+        
+        // 2. DeviceOrientation (Standard)
         if (window.DeviceOrientationEvent) {
             window.addEventListener('deviceorientation', e => {
                 let alpha = e.webkitCompassHeading || e.alpha;
                 if(!alpha && alpha!==0) return;
-                const d2r = Math.PI/180;
-                let a = alpha*d2r, b = e.beta*d2r, g = e.gamma*d2r;
+                
+                // Heading for Compass Rose
+                let heading = alpha;
                 const ang = window.screen.orientation ? window.screen.orientation.angle : 0;
-                if(ang!==0) a += ang*d2r;
+                heading += ang; 
+                
+                // Vector for Dip/Strike
+                const d2r = Math.PI/180;
+                let a = heading*d2r, b = e.beta*d2r, g = e.gamma*d2r;
                 const cA=Math.cos(a), sA=Math.sin(a), cB=Math.cos(b), sB=Math.sin(b), cG=Math.cos(g), sG=Math.sin(g);
-                calcAttitude(cA*sG-sA*sB*cG, -sA*sG-cA*sB*cG, cB*cG);
+                
+                processData(cA*sG-sA*sB*cG, -sA*sG-cA*sB*cG, cB*cG, heading);
             }, true);
         }
     }
 
-    function calcAttitude(nx, ny, nz) {
+    function processData(nx, ny, nz, heading) {
+        // 1. Calculate Strike/Dip
         let dip = Math.acos(Math.abs(nz)) * (180/Math.PI);
         let azimuth = Math.atan2(nx, ny) * (180/Math.PI);
         if(azimuth < 0) azimuth += 360;
+        
         let trueDipDir = ((azimuth + 180) % 360 + db.settings.declination) % 360;
         if(trueDipDir < 0) trueDipDir += 360;
         let strike = (trueDipDir - 90 + 360) % 360;
-        app.strike = Math.round(strike); app.dip = Math.round(dip); app.dipDir = Math.round(trueDipDir);
-        updateUI(nx, ny);
+        
+        app.strike = Math.round(strike);
+        app.dip = Math.round(dip);
+        app.dipDir = Math.round(trueDipDir);
+        app.heading = heading; // Store raw heading
+
+        updateUI(nx, ny, heading);
     }
 
-    function updateUI(nx, ny) {
+    function updateUI(nx, ny, heading) {
         document.getElementById('val-strike').innerText = app.strike + "°";
         document.getElementById('val-dip').innerText = app.dip + "°";
         document.getElementById('val-dipdir').innerText = app.dipDir + "°";
         document.getElementById('mini-s').innerText = app.strike + "°";
         document.getElementById('mini-d').innerText = app.dip + "°";
+        
+        // Update Bubble (Tilt) - Scaled for visibility
         const bubble = document.getElementById('level-bubble');
         let bx = -nx * 75, by = ny * 75;
         let dist = Math.sqrt(bx*bx + by*by);
-        if (dist > 70) { bx *= 70/dist; by *= 70/dist; }
+        if (dist > 80) { bx *= 80/dist; by *= 80/dist; }
         bubble.style.transform = `translate(calc(-50% + ${bx}px), calc(-50% + ${by}px))`;
+
+        // Update Compass Rose (Heading)
+        // We rotate the ROSE counter to the heading. 
+        // If phone points East (90), Rose must rotate -90 so "N" points Left.
+        const rose = document.getElementById('compass-rose');
+        // Use True North offset if set
+        let visualHeading = heading + db.settings.declination;
+        rose.style.transform = `rotate(${-visualHeading}deg)`;
     }
 
-    // --- MAP (Digital Zoom Fix) ---
+    // --- MAP ---
     function initMap() {
         map = L.map('map', {zoomControl:false}).setView([0,0], 2);
         osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
-        satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxNativeZoom: 17, maxZoom: 21 // Smart Scaling
-        });
+        satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 17, maxZoom: 21 });
         osmLayer.addTo(map);
         markers = L.layerGroup().addTo(map);
         renderLogs();
@@ -430,12 +485,8 @@
             s: app.strike, d: app.dip, dd: app.dipDir, lat: app.lat, lng: app.lng, t: new Date().toLocaleString()
         });
         saveDB(); renderLogs();
-        
-        // Visual Flash
         const el = app.minimized ? document.getElementById('mini-header') : document.getElementById('full-content');
         el.style.background = "var(--border)"; setTimeout(()=>el.style.background="",150);
-        
-        // Use the Smart Center Logic
         centerMapOnUser();
     }
 
@@ -473,7 +524,6 @@
     function savePoi() { db.projects[db.currentProject].unshift({ id:Date.now(), type:'poi', name:document.getElementById('poi-name').value, note:document.getElementById('poi-note').value, lat:tempClickLatLng.lat, lng:tempClickLatLng.lng, t:new Date().toLocaleString() }); saveDB(); renderLogs(); closePoi(); }
     function startEdit(id) { editingId=id; const l=db.projects[db.currentProject].find(x=>x.id===id); if(l){ document.getElementById('edit-name').value=l.name; document.getElementById('edit-note').value=l.note; document.getElementById('edit-overlay').style.display='flex'; document.getElementById('notebook-overlay').style.display='none'; } }
     function saveEdit() { const l=db.projects[db.currentProject].find(x=>x.id===editingId); if(l){ l.name=document.getElementById('edit-name').value; l.note=document.getElementById('edit-note').value; saveDB(); renderLogs(); } closeEdit(); }
-    
     function closeEdit() { document.getElementById('edit-overlay').style.display='none'; document.getElementById('notebook-overlay').style.display='flex'; }
 
     function toggleNotebook() { const el=document.getElementById('notebook-overlay'); el.style.display=el.style.display==='flex'?'none':'flex'; if(el.style.display==='flex') renderLogs(); }
