@@ -3,94 +3,94 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Brunton Omni v8</title>
+<title>Brunton Omni v9</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-    /* --- THEMES --- */
+    /* --- THEMES (Map filter removed) --- */
     :root {
         --bg: #000000; --panel: #1c1c1e; --text: #ffffff; --sub: #888;
         --accent: #ff9f0a; --poi: #0a84ff; --danger: #ff453a;
-        --map-filter: grayscale(100%) invert(100%) brightness(0.7); /* Dark Map */
         --border: #333;
+        --header-h: 50px;
     }
     [data-theme="light"] {
         --bg: #f2f2f7; --panel: #ffffff; --text: #000000; --sub: #666;
         --accent: #ff9500; --poi: #007aff; --danger: #ff3b30;
-        --map-filter: none; /* Standard Map */
         --border: #d1d1d6;
     }
 
     body { 
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
         background: var(--bg); color: var(--text); margin: 0; height: 100vh; 
-        display: flex; flex-direction: column; overflow: hidden; transition: background 0.3s, color 0.3s;
+        overflow: hidden; position: relative;
     }
     .flex-row { display: flex; align-items: center; }
-    .flex-col { display: flex; flex-direction: column; }
 
-    /* HEADER */
+    /* HEADER (Fixed Top) */
     #header {
-        flex: 0 0 auto; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--border); 
-        justify-content: space-between; z-index: 50; transition: background 0.3s;
+        position: absolute; top: 0; left: 0; width: 100%; height: var(--header-h);
+        padding: 0 16px; box-sizing: border-box;
+        background: var(--panel); border-bottom: 1px solid var(--border); 
+        display: flex; justify-content: space-between; align-items: center;
+        z-index: 2000; transition: background 0.3s;
     }
-    .project-select { 
-        font-weight: 800; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; gap: 5px;
-    }
+    .project-select { font-weight: 800; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; gap: 5px; }
     .project-select span { color: var(--accent); }
     .arrow-down { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--sub); }
-    
     .status-pill { 
-        font-size: 0.7rem; padding: 6px 12px; border-radius: 20px; 
+        font-size: 0.7rem; padding: 4px 12px; border-radius: 20px; 
         background: var(--bg); color: var(--sub); font-weight: 600; border: 1px solid var(--border); cursor: pointer;
     }
     .status-pill.active { background: var(--accent); color: #000; border-color: var(--accent); }
 
-    /* COMPASS SHEET (ANIMATED) */
+    /* WORKSPACE (Full Screen Behind Panel) */
+    #workspace { 
+        position: absolute; top: var(--header-h); bottom: 0; left: 0; right: 0; 
+        z-index: 1; /* Base Layer */
+    }
+    #map { width: 100%; height: 100%; background: #e5e5e5; }
+
+    /* COMPASS SHEET (Overlay Bottom) */
     #compass-container {
-        flex: 0 0 auto; 
+        position: absolute; bottom: 0; left: 0; width: 100%;
         background: var(--panel); 
-        border-bottom: 1px solid var(--border);
-        position: relative; z-index: 40;
-        border-bottom-left-radius: 20px; border-bottom-right-radius: 20px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        /* Spring Animation */
-        transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.1);
-        overflow: hidden;
-        max-height: 500px; /* Expanded State */
+        border-top: 1px solid var(--border);
+        border-top-left-radius: 20px; border-top-right-radius: 20px;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+        z-index: 3000; /* Above Map */
+        transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+        transform: translateY(0); /* Expanded by default */
+        height: auto; max-height: 80vh;
     }
     
+    /* Minimized State: Pushed down, only showing header */
     #compass-container.minimized {
-        max-height: 60px; /* Collapsed State height */
-        border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+        transform: translateY(calc(100% - 60px)); /* Keep 60px visible */
     }
 
     /* DRAG HANDLE */
     #drag-area {
         width: 100%; height: 30px; display: flex; justify-content: center; align-items: center;
-        cursor: pointer; position: absolute; bottom: 0; left: 0; background: transparent; z-index: 50;
+        cursor: pointer; position: absolute; top: 0; left: 0; z-index: 50;
     }
     #drag-pill { width: 40px; height: 5px; background: var(--sub); border-radius: 10px; opacity: 0.5; }
 
-    /* MINI HEADER (Visible when collapsed) */
+    /* MINI HEADER (Visible in collapsed bar) */
     #mini-header {
-        position: absolute; top: 0; left: 0; width: 100%; height: 60px;
-        display: flex; align-items: center; justify-content: space-around;
-        opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        height: 60px; display: flex; align-items: center; justify-content: space-around;
+        border-bottom: 1px solid var(--border);
     }
-    #compass-container.minimized #mini-header { opacity: 1; pointer-events: auto; }
     .mini-val { font-size: 1.2rem; font-weight: bold; color: var(--accent); font-variant-numeric: tabular-nums; }
     .mini-lbl { font-size: 0.7rem; color: var(--sub); margin-right: 6px; }
 
     /* FULL CONTENT */
     #full-content {
-        padding: 10px 10px 40px 10px; /* Bottom padding for handle */
+        padding: 0 10px 30px 10px; /* Padding for safe area */
         display: flex; flex-direction: column; align-items: center; gap: 10px;
-        opacity: 1; transition: opacity 0.2s;
     }
-    #compass-container.minimized #full-content { opacity: 0; pointer-events: none; }
 
     /* VISUALIZER */
-    #visualizer-container { width: 150px; height: 150px; position: relative; }
+    #visualizer-container { width: 150px; height: 150px; position: relative; margin-top: 10px; }
     #level-housing {
         width: 100%; height: 100%; border-radius: 50%; border: 2px solid var(--border);
         background: radial-gradient(circle, var(--panel) 0%, var(--bg) 100%); position: relative; overflow: hidden;
@@ -102,7 +102,7 @@
     }
     #north-marker { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-size: 0.75rem; color: var(--sub); font-weight: bold; }
 
-    /* DATA CARDS */
+    /* CARDS & BUTTONS */
     .data-row { display: flex; width: 100%; justify-content: center; gap: 10px; }
     .card {
         background: var(--bg); padding: 10px; border-radius: 12px; text-align: center; flex: 1;
@@ -111,7 +111,6 @@
     .card-label { font-size: 0.65rem; color: var(--sub); margin-bottom: 2px; text-transform: uppercase; }
     .card-val { font-size: 2.2rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
 
-    /* PANEL BUTTONS */
     .btn-grid { width: 100%; display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 8px; margin-top: 5px; }
     .btn {
         border: none; padding: 12px 0; border-radius: 8px; font-weight: 700; cursor: pointer; 
@@ -120,29 +119,23 @@
     .btn:active { transform: scale(0.96); }
     .btn-primary { background: var(--accent); color: #000; border: none; }
 
-    /* MAP WORKSPACE */
-    #workspace { flex: 1; position: relative; width: 100%; overflow: hidden; }
-    #map { width: 100%; height: 100%; z-index: 1; background: var(--bg); }
-    
-    /* Map Filter for Dark Mode */
-    .leaflet-tile-pane { filter: var(--map-filter); }
-    
     /* FLOATING ACTION BUTTON (FAB) */
     #fab-record {
-        position: absolute; bottom: 30px; right: 20px;
+        position: absolute; bottom: 80px; right: 20px; /* Above the minimized bar */
         width: 64px; height: 64px; border-radius: 50%; border: none;
         background: var(--accent); color: #000; font-weight: 900; font-size: 0.9rem;
         box-shadow: 0 6px 16px rgba(0,0,0,0.6); cursor: pointer;
         display: flex; justify-content: center; align-items: center;
-        z-index: 1000; /* Highest priority */
-        transform: translateY(150px); /* Hidden initially */
-        transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        z-index: 2500; /* Between Map and Compass Panel */
+        transform: scale(0); /* Hidden by default */
+        transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    #fab-record.visible { transform: translateY(0); }
+    /* Show FAB when minimized */
+    body.panel-minimized #fab-record { transform: scale(1); }
 
-    /* Layer Toggle */
+    /* MAP CONTROLS */
     #layer-btn {
-        position: absolute; top: 20px; right: 20px; z-index: 500;
+        position: absolute; top: 20px; right: 20px; z-index: 1000;
         background: var(--panel); color: var(--text); border: 2px solid var(--border);
         width: 42px; height: 42px; border-radius: 10px; 
         display: flex; justify-content: center; align-items: center; cursor: pointer;
@@ -150,7 +143,7 @@
 
     /* MODALS */
     .overlay {
-        position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000;
+        position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 4000;
         display: none; flex-direction: column; padding: 20px; overflow-y: auto; backdrop-filter: blur(5px);
     }
     .overlay-content { background: var(--panel); padding: 20px; border-radius: 18px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
@@ -170,22 +163,25 @@
     .log-item.type-geo { border-left-color: var(--accent); }
     .log-item.type-poi { border-left-color: var(--poi); }
     .btn-sm { padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; background: var(--border); color: var(--text); border:none;}
-
-    /* PROJECT LIST */
-    .proj-item { 
-        padding: 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; cursor: pointer; 
-    }
+    .proj-item { padding: 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; cursor: pointer; }
     .proj-item.active { color: var(--accent); font-weight: bold; }
-
 </style>
 </head>
 <body>
 
-    <div id="header" class="flex-row">
+    <div id="header">
         <div class="project-select" onclick="openProjects()">
             <span id="current-proj-name">Default</span> <div class="arrow-down"></div>
         </div>
         <div id="mag-status" class="status-pill" onclick="openSettings()">Mag North</div>
+    </div>
+
+    <div id="workspace">
+        <div id="map"></div>
+        <button id="layer-btn" onclick="toggleLayer()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </button>
+        <button id="fab-record" onclick="recordPoint()">REC</button>
     </div>
 
     <div id="compass-container">
@@ -193,46 +189,38 @@
             <div id="drag-pill"></div>
         </div>
 
-        <div id="mini-header">
-            <div class="flex-row"><span class="mini-lbl">STR</span><span id="mini-s" class="mini-val">000</span></div>
-            <div class="flex-row"><span class="mini-lbl">DIP</span><span id="mini-d" class="mini-val">00</span></div>
+        <div>
+            <div id="mini-header">
+                <div class="flex-row"><span class="mini-lbl">STR</span><span id="mini-s" class="mini-val">000</span></div>
+                <div class="flex-row"><span class="mini-lbl">DIP</span><span id="mini-d" class="mini-val">00</span></div>
+            </div>
+
+            <div id="full-content">
+                <div id="visualizer-container">
+                    <div id="level-housing">
+                        <div id="north-marker">N</div>
+                        <div id="level-bubble"></div>
+                    </div>
+                </div>
+                <div class="data-row">
+                    <div class="card">
+                        <div class="card-label">Strike</div>
+                        <div id="val-strike" class="card-val">---</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">Dip</div>
+                        <div id="val-dip" class="card-val">---</div>
+                    </div>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--sub);">Dip Direction: <span id="val-dipdir" style="color:var(--text); font-weight:bold;">---</span></div>
+                
+                <div class="btn-grid">
+                    <button class="btn btn-primary" onclick="recordPoint()">RECORD</button>
+                    <button class="btn" onclick="toggleNotebook()">DATA</button>
+                    <button class="btn" onclick="openSettings()">CONFIG</button>
+                </div>
+            </div>
         </div>
-
-        <div id="full-content">
-            <div id="visualizer-container">
-                <div id="level-housing">
-                    <div id="north-marker">N</div>
-                    <div id="level-bubble"></div>
-                </div>
-            </div>
-            <div class="data-row">
-                <div class="card">
-                    <div class="card-label">Strike</div>
-                    <div id="val-strike" class="card-val">---</div>
-                </div>
-                <div class="card">
-                    <div class="card-label">Dip</div>
-                    <div id="val-dip" class="card-val">---</div>
-                </div>
-            </div>
-            <div style="font-size: 0.8rem; color: var(--sub);">Dip Direction: <span id="val-dipdir" style="color:var(--text); font-weight:bold;">---</span></div>
-            
-            <div class="btn-grid">
-                <button class="btn btn-primary" onclick="recordPoint()">RECORD</button>
-                <button class="btn" onclick="toggleNotebook()">DATA</button>
-                <button class="btn" onclick="openSettings()">CONFIG</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="workspace">
-        <div id="map"></div>
-        
-        <button id="layer-btn" onclick="toggleLayer()">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-        </button>
-
-        <button id="fab-record" onclick="recordPoint()">REC</button>
     </div>
 
     <div id="project-overlay" class="overlay" style="justify-content:center;">
@@ -260,16 +248,13 @@
     <div id="settings-overlay" class="overlay" style="justify-content:center;">
         <div class="overlay-content">
             <div class="overlay-header"><h2>Config</h2><button class="btn-sm" onclick="closeSettings()">Done</button></div>
-            
             <label style="color:var(--sub); font-size:0.8rem;">THEME</label>
-            <button class="btn" style="width:100%; margin-bottom:20px;" onclick="toggleTheme()" id="theme-btn">Switch to Light Mode</button>
-
+            <button class="btn" style="width:100%; margin-bottom:20px;" onclick="toggleTheme()" id="theme-btn">Switch Theme</button>
             <label style="color:var(--sub); font-size:0.8rem;">DECLINATION</label>
             <div class="flex-row" style="gap:10px;">
                 <input type="number" id="inp-dec" placeholder="0.0">
                 <button class="btn" style="width:80px;" onclick="autoDec()">Auto</button>
             </div>
-            
             <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:15px;">
                 <button class="btn btn-primary" style="width:100%;" onclick="requestSensors()">Grant IOS Permission</button>
             </div>
@@ -282,6 +267,7 @@
             <input type="text" id="edit-name"><textarea id="edit-note" placeholder="Notes..."></textarea><button class="btn btn-primary" style="width:100%;" onclick="saveEdit()">SAVE</button>
         </div>
     </div>
+
     <div id="poi-overlay" class="overlay" style="justify-content:center;">
         <div class="overlay-content">
             <div class="overlay-header"><h2 style="color:var(--poi)">Mark</h2><button class="btn-sm" onclick="closePoi()">Cancel</button></div>
@@ -291,93 +277,34 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    // --- DATABASE & STATE ---
-    const DB_KEY = 'brunton_db_v8';
-    let db = {
-        version: 8,
-        settings: { theme: 'dark', declination: 0 },
-        projects: { 'Default': [] }, // Projects Dictionary
-        currentProject: 'Default'
-    };
-
-    // Runtime State
-    let app = {
-        strike: 0, dip: 0, dipDir: 0,
-        lat: null, lng: null,
-        minimized: false, isSat: false
-    };
+    // --- DATABASE ---
+    const DB_KEY = 'brunton_db_v9';
+    let db = { version: 9, settings: { theme: 'dark', declination: 0 }, projects: { 'Default': [] }, currentProject: 'Default' };
+    let app = { strike: 0, dip: 0, dipDir: 0, lat: null, lng: null, minimized: false, isSat: false };
     let map, markers, userSpot, osmLayer, satLayer;
     let editingId = null, tempClickLatLng = null;
 
-    // --- INIT ---
     window.onload = () => {
-        loadDB();
-        applyTheme();
-        initMap();
-        initSensors();
-        initUI();
+        loadDB(); applyTheme(); initMap(); initSensors(); initUI();
     };
 
     function loadDB() {
         const saved = localStorage.getItem(DB_KEY);
-        if (saved) {
-            db = JSON.parse(saved);
-        } else {
-            // MIGRATION FROM v7
-            const oldLogs = localStorage.getItem('brunton_logs_v7');
-            if (oldLogs) db.projects['Imported_v7'] = JSON.parse(oldLogs);
-            const oldDec = localStorage.getItem('brunton_dec');
-            if (oldDec) db.settings.declination = parseFloat(oldDec);
+        if (saved) db = JSON.parse(saved);
+        else {
+            // Migrate v8 if exists
+            const v8 = localStorage.getItem('brunton_db_v8');
+            if(v8) db = JSON.parse(v8);
             saveDB();
         }
-        updateProjectDisplay();
-        updateDecDisplay();
+        updateProjectDisplay(); updateDecDisplay();
     }
     function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
 
-    // --- THEMES ---
-    function toggleTheme() {
-        db.settings.theme = db.settings.theme === 'dark' ? 'light' : 'dark';
-        saveDB(); applyTheme();
-    }
-    function applyTheme() {
-        document.documentElement.setAttribute('data-theme', db.settings.theme);
-        document.getElementById('theme-btn').innerText = db.settings.theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
-    }
-
-    // --- PROJECTS ---
-    function openProjects() {
-        const list = document.getElementById('project-list');
-        list.innerHTML = '';
-        Object.keys(db.projects).forEach(p => {
-            const div = document.createElement('div');
-            div.className = `proj-item ${p === db.currentProject ? 'active' : ''}`;
-            div.innerHTML = `<span>${p}</span> <span style="font-size:0.8rem; color:var(--sub)">${db.projects[p].length} pts</span>`;
-            div.onclick = () => switchProject(p);
-            list.appendChild(div);
-        });
-        document.getElementById('project-overlay').style.display = 'flex';
-    }
-    function createProject() {
-        const name = document.getElementById('new-proj-name').value.trim();
-        if(name && !db.projects[name]) {
-            db.projects[name] = [];
-            switchProject(name);
-        }
-    }
-    function switchProject(name) {
-        db.currentProject = name;
-        saveDB(); updateProjectDisplay(); renderLogs();
-        closeProjects();
-    }
-    function updateProjectDisplay() { document.getElementById('current-proj-name').innerText = db.currentProject; }
-    function closeProjects() { document.getElementById('project-overlay').style.display = 'none'; }
-
-    // --- UI ANIMATION ---
+    // --- UI INTERACTION ---
     function initUI() {
         const handle = document.getElementById('drag-area');
         handle.addEventListener('click', togglePanel);
-        
         let sy = 0;
         handle.addEventListener('touchstart', e => { sy = e.touches[0].clientY; });
         handle.addEventListener('touchend', e => {
@@ -390,16 +317,15 @@
     function togglePanel() {
         app.minimized = !app.minimized;
         const panel = document.getElementById('compass-container');
-        const fab = document.getElementById('fab-record');
+        const body = document.body;
         
         if(app.minimized) {
             panel.classList.add('minimized');
-            fab.classList.add('visible');
+            body.classList.add('panel-minimized');
         } else {
             panel.classList.remove('minimized');
-            fab.classList.remove('visible');
+            body.classList.remove('panel-minimized');
         }
-        setTimeout(() => map.invalidateSize(), 500);
     }
 
     // --- SENSORS ---
@@ -412,11 +338,13 @@
                     let nx = 2 * (q[0] * q[2] - q[3] * q[1]);
                     let ny = 2 * (q[1] * q[2] + q[3] * q[0]);
                     let nz = 1 - 2 * (q[0] * q[0] + q[1] * q[1]);
+                    
                     const ang = window.screen.orientation ? window.screen.orientation.angle : 0;
                     if(ang !== 0) {
                         const rad = -ang * Math.PI/180;
                         const c = Math.cos(rad), sn = Math.sin(rad);
-                        const rx = nx * c - ny * sn, ry = nx * sn + ny * c;
+                        const rx = nx * c - ny * sn;
+                        const ry = nx * sn + ny * c;
                         nx = rx; ny = ry;
                     }
                     calcAttitude(nx, ny, nz);
@@ -430,179 +358,6 @@
                 if(!alpha && alpha!==0) return;
                 const d2r = Math.PI/180;
                 let a = alpha*d2r, b = e.beta*d2r, g = e.gamma*d2r;
+                
                 const ang = window.screen.orientation ? window.screen.orientation.angle : 0;
-                if(ang!==0) a += ang*d2r;
-                const cA=Math.cos(a), sA=Math.sin(a), cB=Math.cos(b), sB=Math.sin(b), cG=Math.cos(g), sG=Math.sin(g);
-                calcAttitude(cA*sG-sA*sB*cG, -sA*sG-cA*sB*cG, cB*cG);
-            }, true);
-        }
-    }
-
-    function calcAttitude(nx, ny, nz) {
-        let dip = Math.acos(Math.abs(nz)) * (180/Math.PI);
-        let azimuth = Math.atan2(nx, ny) * (180/Math.PI);
-        if(azimuth < 0) azimuth += 360;
-        let trueDipDir = ((azimuth + 180) % 360 + db.settings.declination) % 360;
-        if(trueDipDir < 0) trueDipDir += 360;
-        let strike = (trueDipDir - 90 + 360) % 360;
-        
-        app.strike = Math.round(strike); app.dip = Math.round(dip); app.dipDir = Math.round(trueDipDir);
-        updateUI(nx, ny);
-    }
-
-    function updateUI(nx, ny) {
-        document.getElementById('val-strike').innerText = app.strike + "°";
-        document.getElementById('val-dip').innerText = app.dip + "°";
-        document.getElementById('val-dipdir').innerText = app.dipDir + "°";
-        document.getElementById('mini-s').innerText = app.strike + "°";
-        document.getElementById('mini-d').innerText = app.dip + "°";
-        
-        const bubble = document.getElementById('level-bubble');
-        let bx = -nx * 90, by = ny * 90;
-        let dist = Math.sqrt(bx*bx + by*by);
-        if (dist > 70) { bx *= 70/dist; by *= 70/dist; }
-        bubble.style.transform = `translate(calc(-50% + ${bx}px), calc(-50% + ${by}px))`;
-    }
-
-    // --- MAP ---
-    function initMap() {
-        map = L.map('map', {zoomControl:false}).setView([0,0], 2);
-        osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
-        satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19});
-        osmLayer.addTo(map);
-        markers = L.layerGroup().addTo(map);
-        renderLogs();
-
-        navigator.geolocation.watchPosition(p => {
-            app.lat = p.coords.latitude; app.lng = p.coords.longitude;
-            if(!userSpot) {
-                userSpot = L.circleMarker([app.lat, app.lng], {color:'var(--accent)', radius:6}).addTo(map);
-                map.setView([app.lat, app.lng], 18);
-            } else userSpot.setLatLng([app.lat, app.lng]);
-        }, null, {enableHighAccuracy:true});
-
-        map.on('click', e => {
-            tempClickLatLng = e.latlng;
-            document.getElementById('poi-name').value = `Loc-${db.projects[db.currentProject].length+1}`;
-            document.getElementById('poi-note').value = "";
-            document.getElementById('poi-overlay').style.display = 'flex';
-        });
-    }
-
-    function toggleLayer() {
-        if(app.isSat) { map.removeLayer(satLayer); osmLayer.addTo(map); } 
-        else { map.removeLayer(osmLayer); satLayer.addTo(map); }
-        app.isSat = !app.isSat;
-    }
-
-    function createStructIcon(s, d) {
-        const sz = 50;
-        return L.divIcon({
-            className: 'geo-symbol',
-            html: `<div style="transform:rotate(${s}deg);width:${sz}px;height:${sz}px;display:flex;justify-content:center;align-items:center;">
-            <svg width="${sz}" height="${sz}" viewBox="0 0 100 100" style="overflow:visible;">
-            <line x1="50" y1="10" x2="50" y2="90" stroke="var(--accent)" stroke-width="6" stroke-linecap="round"/>
-            <line x1="50" y1="50" x2="80" y2="50" stroke="var(--accent)" stroke-width="6" stroke-linecap="round"/>
-            </svg>
-            <div style="position:absolute;left:80%;top:30%;width:40px;"><div style="transform:rotate(-${s}deg);color:var(--accent);font-weight:bold;font-size:14px;text-shadow:0 0 2px black;text-align:center;">${d}</div></div></div>`,
-            iconSize:[sz,sz], iconAnchor:[sz/2,sz/2]
-        });
-    }
-
-    function renderLogs() {
-        markers.clearLayers();
-        const logs = db.projects[db.currentProject];
-        const list = document.getElementById('logs-list');
-        list.innerHTML = "";
-
-        logs.forEach(l => {
-            if(l.type === 'poi') {
-                L.circleMarker([l.lat, l.lng], {color:'var(--poi)', radius:6}).bindPopup(`<b>${l.name}</b><br>${l.note}`).addTo(markers);
-            } else {
-                L.marker([l.lat, l.lng], {icon:createStructIcon(l.s, l.d)}).bindPopup(`<b>${l.name}</b><br>S:${l.s} D:${l.d}`).addTo(markers);
-            }
-            
-            const div = document.createElement('div');
-            div.className = `log-item type-${l.type}`;
-            const disp = l.type === 'poi' ? `<span style="color:var(--poi)">POI</span>` : `<span style="color:var(--accent)">S${l.s}/D${l.d}</span>`;
-            div.innerHTML = `<div style="flex:1;"><div style="font-weight:bold;">${l.name}</div><div>${disp}</div><div style="font-size:0.7rem;color:var(--sub);">${l.t}</div></div>
-            <div style="display:flex;gap:5px;"><button class="btn-sm" onclick="startEdit(${l.id})">Edit</button><button class="btn-sm" style="background:var(--danger);color:white;" onclick="delLog(${l.id})">X</button></div>`;
-            list.appendChild(div);
-        });
-    }
-
-    // --- ACTIONS ---
-    function recordPoint() {
-        if(!app.lat) return alert("Waiting for GPS...");
-        const logs = db.projects[db.currentProject];
-        logs.unshift({
-            id: Date.now(), type: 'geo', name: `Stn-${logs.length+1}`, note: '',
-            s: app.strike, d: app.dip, dd: app.dipDir, lat: app.lat, lng: app.lng,
-            t: new Date().toLocaleString()
-        });
-        saveDB(); renderLogs();
-        
-        // Visual Flash
-        const el = app.minimized ? document.getElementById('mini-header') : document.getElementById('full-content');
-        el.style.background = "#333"; setTimeout(()=>el.style.background="",150);
-    }
-
-    // --- CRUD ---
-    function delLog(id) { if(confirm("Delete?")) { db.projects[db.currentProject] = db.projects[db.currentProject].filter(x=>x.id!==id); saveDB(); renderLogs(); }}
-    function savePoi() { 
-        db.projects[db.currentProject].unshift({
-            id:Date.now(), type:'poi', name:document.getElementById('poi-name').value, 
-            note:document.getElementById('poi-note').value, lat:tempClickLatLng.lat, lng:tempClickLatLng.lng, t:new Date().toLocaleString()
-        });
-        saveDB(); renderLogs(); closePoi(); 
-    }
-    function startEdit(id) { 
-        editingId=id; const l=db.projects[db.currentProject].find(x=>x.id===id); 
-        if(l){ document.getElementById('edit-name').value=l.name; document.getElementById('edit-note').value=l.note; document.getElementById('edit-overlay').style.display='flex'; toggleNotebook(); }
-    }
-    function saveEdit() { 
-        const l=db.projects[db.currentProject].find(x=>x.id===editingId); 
-        if(l){ l.name=document.getElementById('edit-name').value; l.note=document.getElementById('edit-note').value; saveDB(); renderLogs(); } 
-        closeEdit(); toggleNotebook();
-    }
-
-    // --- MODAL UTILS ---
-    function toggleNotebook() { const el=document.getElementById('notebook-overlay'); el.style.display=el.style.display==='flex'?'none':'flex'; if(el.style.display==='flex') renderLogs(); }
-    function closeEdit() { document.getElementById('edit-overlay').style.display='none'; }
-    function closePoi() { document.getElementById('poi-overlay').style.display='none'; }
-    function openSettings() { document.getElementById('settings-overlay').style.display='flex'; document.getElementById('inp-dec').value=db.settings.declination; }
-    function closeSettings() { 
-        document.getElementById('settings-overlay').style.display='none'; 
-        db.settings.declination=parseFloat(document.getElementById('inp-dec').value)||0; 
-        saveDB(); updateDecDisplay(); 
-    }
-    function updateDecDisplay() { 
-        const el=document.getElementById('mag-status'); 
-        el.innerText=db.settings.declination===0?"Mag North":`True North (${db.settings.declination})`; 
-        el.classList.toggle('active', db.settings.declination!==0); 
-    }
-    
-    // --- EXPORT ---
-    function exportCSV() { 
-        const logs=db.projects[db.currentProject]; 
-        const csv="Type,Name,Note,Strike,Dip,DipDir,Lat,Lng,Time\n"+logs.map(l=>`${l.type},"${l.name}","${l.note}",${l.s},${l.d},${l.dd},${l.lat},${l.lng},"${l.t}"`).join('\n'); 
-        downloadFile(csv, 'csv', 'csv');
-    }
-    function exportKML() {
-        const logs=db.projects[db.currentProject];
-        let kml=`<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${db.currentProject}</name><Style id="s"><IconStyle><scale>1.2</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/arrow.png</href></Icon></IconStyle></Style>`;
-        logs.forEach(l => {
-            if(l.type==='poi') kml+=`<Placemark><name>${l.name}</name><description>${l.note}</description><Point><coordinates>${l.lng},${l.lat},0</coordinates></Point></Placemark>`;
-            else kml+=`<Placemark><name>${l.name}</name><description>S:${l.s} D:${l.d}</description><styleUrl>#s</styleUrl><Style><IconStyle><heading>${l.dd}</heading></IconStyle></Style><Point><coordinates>${l.lng},${l.lat},0</coordinates></Point></Placemark>`;
-        });
-        kml+='</Document></kml>';
-        downloadFile(kml, 'kml', 'application/vnd.google-earth.kml+xml');
-    }
-    function downloadFile(content, ext, type) {
-        const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type:type})); a.download=`${db.currentProject}.${ext}`; a.click();
-    }
-    function autoDec() { window.open(`https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml?lat=${app.lat}&lon=${app.lng}`,'_blank'); }
-    function requestSensors() { if(typeof DeviceOrientationEvent.requestPermission==='function') DeviceOrientationEvent.requestPermission(); }
-</script>
-</body>
-</html>
+                if(ang!==0) a += ang*d
