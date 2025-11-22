@@ -3,222 +3,325 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Brunton Omni-Tool</title>
+<title>Brunton Omni v2</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-    :root { --bg: #000000; --panel: #1c1c1e; --accent: #ff9f0a; --text: #ffffff; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-    
-    /* UI COMPONENTS */
-    #header { padding: 15px; background: var(--panel); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
-    .status-pill { font-size: 0.7rem; padding: 4px 8px; border-radius: 12px; background: #333; color: #888; transition: 0.3s; }
-    .status-pill.active { background: var(--accent); color: #000; font-weight: bold; }
+    :root { 
+        --bg: #050505; 
+        --panel: #1c1c1e; 
+        --accent: #ff9f0a; 
+        --text: #ffffff; 
+        --danger: #ff453a;
+    }
+    body { 
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+        background: var(--bg); 
+        color: var(--text); 
+        margin: 0; 
+        height: 100vh; 
+        display: flex; 
+        flex-direction: column; 
+        overflow: hidden; 
+    }
 
-    #main-readout { flex: 0 0 auto; position: relative; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; }
-    
-    /* CIRCULAR LEVEL (BULLSEYE) */
-    #level-housing { width: 240px; height: 240px; border-radius: 50%; border: 2px solid #333; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 0; pointer-events: none; }
-    #level-bubble { width: 40px; height: 40px; background: var(--accent); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 15px rgba(255,159,10,0.4); transition: transform 0.1s linear; }
-    #level-crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; background: #555; border-radius: 50%; transform: translate(-50%, -50%); }
+    /* --- LAYOUT UTILS --- */
+    .flex-col { display: flex; flex-direction: column; }
+    .flex-row { display: flex; align-items: center; }
+    .center { justify-content: center; align-items: center; }
 
-    /* TEXT DATA */
-    .data-grid { display: grid; grid-template-columns: 1fr 1fr; width: 100%; z-index: 1; margin-top: 140px; gap: 20px; }
-    .metric-box { text-align: center; background: rgba(28,28,30,0.8); padding: 15px; border-radius: 12px; backdrop-filter: blur(5px); }
-    .label { font-size: 0.7rem; color: #aaa; letter-spacing: 1px; margin-bottom: 5px; }
-    .value { font-size: 2.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-    
-    /* CONTROLS */
-    #controls { padding: 15px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; background: var(--bg); }
-    button { background: var(--panel); color: white; border: none; padding: 15px 0; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
-    button:active { background: #333; }
-    .btn-primary { background: var(--accent); color: black; }
+    /* --- HEADER --- */
+    #header {
+        padding: 12px 16px;
+        background: var(--panel);
+        border-bottom: 1px solid #333;
+        justify-content: space-between;
+    }
+    .brand { font-weight: 800; font-style: italic; letter-spacing: -0.5px; font-size: 1.1rem; }
+    .brand span { color: var(--accent); }
+    .status-pill { 
+        font-size: 0.75rem; padding: 6px 12px; border-radius: 20px; 
+        background: #333; color: #aaa; font-weight: 600; transition: 0.3s; cursor: pointer;
+    }
+    .status-pill.active { background: var(--accent); color: #000; }
 
-    /* MAP & LIST */
-    #workspace { flex: 1; position: relative; }
-    #map { width: 100%; height: 100%; }
-    
-    /* OVERLAYS */
-    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 999; display: none; padding: 20px; overflow-y: auto; }
+    /* --- MAIN READOUT (Redesigned to fix overlap) --- */
+    #main-readout {
+        flex: 0 0 auto;
+        padding: 20px 10px;
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 15px; /* Space between elements */
+    }
+
+    /* 1. The Visualizer (Top) */
+    #visualizer-container {
+        width: 180px;
+        height: 180px;
+        position: relative;
+        margin-bottom: 10px;
+    }
+    #level-housing {
+        width: 100%; height: 100%;
+        border-radius: 50%;
+        border: 2px solid #333;
+        background: radial-gradient(circle, #1a1a1a 0%, #000 100%);
+        position: relative;
+        overflow: hidden;
+    }
+    #level-bubble {
+        width: 30px; height: 30px;
+        background: var(--accent);
+        border-radius: 50%;
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 0 10px rgba(255, 159, 10, 0.6);
+        transition: transform 0.1s linear;
+        z-index: 2;
+    }
+    #level-crosshair {
+        position: absolute; top: 50%; left: 50%;
+        width: 6px; height: 6px;
+        background: #555; border-radius: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 1;
+    }
+    /* North Indicator on the visualizer */
+    #north-marker {
+        position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
+        font-size: 0.7rem; color: #555; font-weight: bold;
+    }
+
+    /* 2. The Data Cards (Below Visualizer) */
+    .data-row {
+        display: flex;
+        width: 100%;
+        justify-content: center;
+        gap: 15px;
+    }
+    .card {
+        background: var(--panel);
+        padding: 15px;
+        border-radius: 12px;
+        text-align: center;
+        flex: 1;
+        max-width: 160px;
+        border: 1px solid #333;
+    }
+    .card-label { font-size: 0.7rem; color: #888; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase; }
+    .card-val { font-size: 2.8rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; line-height: 1; }
+    .card-sub { font-size: 0.8rem; color: #666; margin-top: 4px; }
+
+    /* --- CONTROLS --- */
+    #controls {
+        padding: 10px 15px;
+        display: grid;
+        grid-template-columns: 1.5fr 1fr 1fr;
+        gap: 10px;
+        background: var(--bg);
+        border-bottom: 1px solid #333;
+    }
+    .btn {
+        border: none; padding: 14px 0; border-radius: 8px;
+        font-weight: 700; cursor: pointer; font-size: 0.9rem; color: white;
+        background: #2c2c2e; transition: transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #000; }
+
+    /* --- MAP --- */
+    #workspace { flex: 1; position: relative; width: 100%; }
+    #map { width: 100%; height: 100%; z-index: 1; }
+
+    /* --- MODALS (Overlays) --- */
+    .overlay {
+        position: fixed; inset: 0; background: #000000; z-index: 9999;
+        display: none; flex-direction: column; padding: 20px; overflow-y: auto;
+    }
     .overlay-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .log-entry { background: var(--panel); padding: 15px; margin-bottom: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent); }
+    .overlay h2 { margin: 0; color: var(--accent); }
+    
+    .input-group { margin-bottom: 20px; background: var(--panel); padding: 15px; border-radius: 12px; }
+    input[type="number"] { width: 100%; padding: 12px; background: #000; border: 1px solid #444; color: white; border-radius: 6px; box-sizing: border-box; font-size: 1.1rem; margin-top: 10px;}
 
-    /* INPUTS */
-    .input-row { display: flex; gap: 10px; margin-bottom: 15px; }
-    input { background: #000; border: 1px solid #333; color: white; padding: 10px; border-radius: 6px; flex: 1; }
+    /* Log List Styles */
+    .log-item {
+        background: var(--panel); padding: 15px; margin-bottom: 10px; border-radius: 10px;
+        display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent);
+    }
+    .log-actions { display: flex; gap: 10px; }
+    .btn-del { background: var(--danger); padding: 8px 12px; font-size: 0.8rem; }
 </style>
 </head>
 <body>
 
-<div id="header">
-    <div style="font-weight:800; font-style:italic;">BRUNTON<span style="color:var(--accent)">OMNI</span></div>
-    <div id="mag-status" class="status-pill" onclick="openSettings()">Mag North</div>
-</div>
-
-<div id="main-readout">
-    <div id="level-housing">
-        <div id="level-crosshair"></div>
-        <div id="level-bubble"></div>
+    <div id="header" class="flex-row">
+        <div class="brand">BRUNTON<span>OMNI</span></div>
+        <div id="mag-status" class="status-pill" onclick="openSettings()">Mag North</div>
     </div>
 
-    <div class="data-grid">
-        <div class="metric-box">
-            <div class="label">STRIKE (RHR)</div>
-            <div id="val-strike" class="value">---</div>
+    <div id="main-readout">
+        <div id="visualizer-container">
+            <div id="level-housing">
+                <div id="north-marker">N</div>
+                <div id="level-crosshair"></div>
+                <div id="level-bubble"></div>
+            </div>
         </div>
-        <div class="metric-box">
-            <div class="label">DIP</div>
-            <div id="val-dip" class="value">---</div>
+
+        <div class="data-row">
+            <div class="card">
+                <div class="card-label">Strike (RHR)</div>
+                <div id="val-strike" class="card-val">---</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Dip Angle</div>
+                <div id="val-dip" class="card-val">---</div>
+            </div>
+        </div>
+        
+        <div style="font-size: 0.9rem; color: #888;">
+            Dip Direction: <span id="val-dipdir" style="color:white; font-weight:bold;">---</span>
         </div>
     </div>
-    <div style="text-align:center; width:100%; margin-top:10px; font-size:0.9rem; color:#888; z-index:2;">
-        Dip Direction: <span id="val-dipdir" style="color:white; font-weight:bold;">---</span>
+
+    <div id="controls">
+        <button class="btn btn-primary" onclick="recordPoint()">RECORD</button>
+        <button class="btn" onclick="toggleNotebook()">DATA</button>
+        <button class="btn" onclick="openSettings()">CONFIG</button>
     </div>
-</div>
 
-<div id="controls">
-    <button class="btn-primary" onclick="recordPoint()">RECORD</button>
-    <button onclick="toggleData()">NOTEBOOK</button>
-    <button onclick="openSettings()">SETTINGS</button>
-</div>
-
-<div id="workspace">
-    <div id="map"></div>
-</div>
-
-<div id="settings-overlay" class="overlay">
-    <div class="overlay-header">
-        <h2>Compass Config</h2>
-        <button style="width:auto; padding:5px 15px;" onclick="closeSettings()">DONE</button>
+    <div id="workspace">
+        <div id="map"></div>
     </div>
-    
-    <div style="background:var(--panel); padding:15px; border-radius:10px;">
-        <label class="label">MAGNETIC DECLINATION (TRUE NORTH)</label>
-        <div class="input-row" style="margin-top:10px;">
-            <input type="number" id="inp-dec" placeholder="0.0" value="0">
-            <button style="flex:0 0 100px; background:#333;" onclick="autoDec()">AUTO GET</button>
+
+    <div id="settings-overlay" class="overlay">
+        <div class="overlay-header">
+            <h2>Configuration</h2>
+            <button class="btn" style="width:auto; padding: 8px 16px;" onclick="closeSettings()">Done</button>
         </div>
-        <p style="font-size:0.8rem; color:#666;">
-            Positive = East, Negative = West.<br>
-            "Auto Get" opens NOAA calculator for your GPS location.
-        </p>
+        <div class="input-group">
+            <label style="color:#888; font-size:0.9rem;">MAGNETIC DECLINATION (TRUE NORTH)</label>
+            <div style="display:flex; gap:10px; align-items: flex-end;">
+                <input type="number" id="inp-dec" placeholder="0.0" value="0">
+                <button class="btn" style="padding: 12px; background: #333;" onclick="autoDec()">Auto</button>
+            </div>
+            <p style="font-size:0.8rem; color:#666; margin-top:8px;">Click Auto to fetch from NOAA (External)</p>
+        </div>
+        
+        <div class="input-group" style="border:1px solid var(--accent);">
+             <label style="color:var(--accent); font-weight:bold;">IOS / SENSOR PERMISSION</label>
+             <p style="font-size:0.8rem; color:#aaa; margin: 5px 0 15px 0;">If compass is not moving, tap below.</p>
+             <button class="btn btn-primary" style="width:100%;" onclick="requestSensors()">Grant Permission</button>
+        </div>
     </div>
-    
-    <div style="margin-top:20px; padding:15px; border:1px solid #333; border-radius:10px;">
-        <label class="label">IOS PERMISSION</label><br><br>
-        <button style="width:100%;" onclick="requestIOS()">GRANT SENSORS</button>
-    </div>
-</div>
 
-<div id="data-overlay" class="overlay">
-    <div class="overlay-header">
-        <h2>Field Notebook</h2>
-        <button style="width:auto; padding:5px 15px;" onclick="toggleData()">CLOSE</button>
+    <div id="notebook-overlay" class="overlay">
+        <div class="overlay-header">
+            <h2>Field Notebook</h2>
+            <button class="btn" style="width:auto; padding: 8px 16px;" onclick="toggleNotebook()">Close</button>
+        </div>
+        <button class="btn" style="width:100%; margin-bottom:20px; background:#333;" onclick="exportCSV()">Export CSV</button>
+        <div id="logs-list"></div>
     </div>
-    <button onclick="exportCSV()" style="width:100%; margin-bottom:20px; background:#333;">EXPORT CSV</button>
-    <div id="logs-list"></div>
-</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    // STATE
+    // --- STATE ---
     let app = {
         strike: 0, dip: 0, dipDir: 0,
         lat: null, lng: null,
-        declination: parseFloat(localStorage.getItem('omni_dec')) || 0,
-        logs: JSON.parse(localStorage.getItem('omni_logs')) || []
+        declination: parseFloat(localStorage.getItem('brunton_dec')) || 0,
+        logs: JSON.parse(localStorage.getItem('brunton_logs')) || []
     };
     let map, markers, userSpot;
-    const isIOS = typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function';
 
-    // STARTUP
+    // --- STARTUP ---
     window.onload = () => {
         initMap();
         initSensors();
         updateDecDisplay();
     };
 
-    // SENSOR LOGIC (THE CORE MATH)
+    // --- MATH ENGINE (SPIN INDEPENDENT) ---
     function initSensors() {
         // 1. Try AbsoluteOrientationSensor (Android Pro)
         if ('AbsoluteOrientationSensor' in window) {
             try {
                 const sensor = new AbsoluteOrientationSensor({ frequency: 60, referenceFrame: 'device' });
                 sensor.addEventListener('reading', () => {
-                    // Quaternion to Rotation Matrix Z-Column (Normal Vector)
+                    // Quaternion to Rotation Matrix Z-Axis
                     const q = sensor.quaternion;
-                    // Normal Vector [nx, ny, nz] relative to phone screen
+                    // Vector pointing out of screen (Z) in World Coordinates
                     let nx = 2 * (q[0] * q[2] - q[3] * q[1]);
                     let ny = 2 * (q[1] * q[2] + q[3] * q[0]);
                     let nz = 1 - 2 * (q[0] * q[0] + q[1] * q[1]);
-                    solveAttitude(nx, ny, nz);
+                    calculateAttitude(nx, ny, nz);
                 });
                 sensor.start();
+                console.log('Using AbsoluteOrientationSensor');
                 return;
-            } catch(e) { console.log("Pro sensor fail"); }
+            } catch(e) { console.warn(e); }
         }
         
-        // 2. Fallback to Standard/iOS
-        window.addEventListener('deviceorientation', handleStandard, true);
-    }
+        // 2. Fallback to DeviceOrientation (Standard/iOS)
+        if (window.DeviceOrientationEvent) {
+            window.addEventListener('deviceorientation', (e) => {
+                // Convert Euler Angles (degrees) to Radians
+                // Note: iOS webkitCompassHeading handles North, but for spin independence
+                // we need the full matrix projection.
+                
+                let alpha = e.alpha;
+                // Fix for iOS Webkit
+                if(e.webkitCompassHeading) alpha = e.webkitCompassHeading;
+                
+                const deg2rad = Math.PI / 180;
+                const a = alpha * deg2rad;
+                const b = e.beta * deg2rad;
+                const g = e.gamma * deg2rad;
 
-    function handleStandard(e) {
-        // MATH: Convert Euler Angles to Vector for "Spin Independence"
-        let alpha = e.alpha, beta = e.beta, gamma = e.gamma;
+                const cA = Math.cos(a), sA = Math.sin(a);
+                const cB = Math.cos(b), sB = Math.sin(b);
+                const cG = Math.cos(g), sG = Math.sin(g);
 
-        // iOS Special Handling for North
-        if (e.webkitCompassHeading) { 
-            // iOS 'alpha' is not North-referenced usually. 
-            // We use compassHeading as the base Azimuth substitute.
-            // But to do "Spin Independence" properly, we need the full matrix.
-            // Simplified robust method for iOS:
-            alpha = e.webkitCompassHeading; // Use this as 'Z' rotation relative to North
-            // Note: This assumes phone Y-axis alignment for 'Heading', 
-            // but we correct it using the vector projection below.
+                // Calculate Normal Vector (Z-Axis) in World Frame
+                // Standard rotation matrix Z-column
+                // This represents the arrow pointing UP out of the phone screen
+                let nx = cA * sG - sA * sB * cG;
+                let ny = -sA * sG - cA * sB * cG;
+                let nz = cB * cG;
+
+                calculateAttitude(nx, ny, nz);
+            }, true);
         }
-
-        // Deg->Rad
-        let a = alpha * Math.PI / 180;
-        let b = beta * Math.PI / 180;
-        let g = gamma * Math.PI / 180;
-
-        // Rotation Matrix Z-Axis (Normal Vector) calculation
-        // Standard Z-X-Y Euler sequence
-        let cA = Math.cos(a), sA = Math.sin(a);
-        let cB = Math.cos(b), sB = Math.sin(b);
-        let cG = Math.cos(g), sG = Math.sin(g);
-
-        // The Normal Vector (Z axis of device) in World Coordinates:
-        // If iOS, we might need sign inversion on Gamma/Beta depending on orientation
-        // But generally:
-        let nx = cA * sG - sA * sB * cG; 
-        let ny = -sA * sG - cA * sB * cG;
-        let nz = cB * cG;
-        
-        // If iOS, the alpha is typically "inverted" (0-360 CW vs CCW)
-        // We usually just rely on the projection math:
-        solveAttitude(nx, ny, nz);
     }
 
-    function solveAttitude(nx, ny, nz) {
-        // 1. Dip (Vertical Angle)
+    function calculateAttitude(nx, ny, nz) {
+        // 1. DIP (Inclination from Vertical)
+        // Dot product of Normal with Vertical (0,0,1) is just nz
         let dip = Math.acos(Math.abs(nz)) * (180 / Math.PI);
 
-        // 2. Dip Direction (Azimuth of the projection of Normal Vector)
-        // This is the key: 'nx' and 'ny' are the components of the arrow sticking out of the rock.
-        // Their direction is locked to the rock, not the phone's spin.
-        let dirRad = Math.atan2(ny, nx);
-        let azimuth = dirRad * (180 / Math.PI);
+        // 2. DIP DIRECTION (The Spin-Independent Part)
+        // The Dip Direction is determined by the projection of the Normal Vector
+        // onto the horizontal plane (nx, ny).
+        // The direction of the normal vector is "Up Dip".
+        // The direction of Dip is "Down Dip" (opposite).
         
-        // Convert Math Angle (CCW from East) to Compass (CW from North)
-        // Compass = (450 - Math) % 360 ?? 
-        // Or simpler: Dip Direction is generally opposite to the Normal Vector's horizontal projection.
-        // Let's use standard conversion:
-        let dipDirRaw = (Math.atan2(nx, ny) * (180 / Math.PI) + 180) % 360;
+        // Calculate Azimuth of the Normal Vector
+        let azimuth = Math.atan2(nx, ny) * (180 / Math.PI);
+        if (azimuth < 0) azimuth += 360;
 
-        // 3. Apply Declination (True North Fix)
-        let trueDipDir = (dipDirRaw + app.declination + 360) % 360;
+        // Dip Direction is 180 degrees from the Normal Vector azimuth
+        let dipDirRaw = (azimuth + 180) % 360;
 
-        // 4. Strike (Right Hand Rule)
+        // 3. TRUE NORTH CORRECTION
+        let trueDipDir = (dipDirRaw + app.declination) % 360;
+        if(trueDipDir < 0) trueDipDir += 360;
+
+        // 4. STRIKE (Right Hand Rule)
+        // Strike is 90 degrees Counter-Clockwise from Dip Direction
         let strike = (trueDipDir - 90 + 360) % 360;
 
         updateUI(strike, dip, trueDipDir, nx, ny);
@@ -233,68 +336,39 @@
         document.getElementById('val-dip').innerText = app.dip + "°";
         document.getElementById('val-dipdir').innerText = app.dipDir + "°";
 
-        // Bubble: Project Normal Vector (nx, ny) onto screen plane?
-        // Actually we want the bubble to show TILT.
-        // If nx=0, ny=0, we are flat.
-        // Scale for visibility
-        let bx = -nx * 100; 
+        // Bubble Visualizer
+        // We visualize the Tilt Vector (nx, ny).
+        // If nx=0, ny=0, phone is flat.
+        const bubble = document.getElementById('level-bubble');
+        const maxPx = 75; // Radius of housing
+        
+        // Sensitivity scale (make it move visibly)
+        let bx = -nx * 100;
         let by = ny * 100;
+        
+        // Clamp to circle
         let dist = Math.sqrt(bx*bx + by*by);
-        if (dist > 110) { bx *= 110/dist; by *= 110/dist; }
-        document.getElementById('level-bubble').style.transform = `translate(calc(-50% + ${bx}px), calc(-50% + ${by}px))`;
+        if (dist > maxPx) {
+            bx = (bx/dist) * maxPx;
+            by = (by/dist) * maxPx;
+        }
+
+        bubble.style.transform = `translate(calc(-50% + ${bx}px), calc(-50% + ${by}px))`;
     }
 
-    // DATA & SETTINGS
-    function requestIOS() {
-        if(isIOS) DeviceOrientationEvent.requestPermission().then(r => {
-            if(r==='granted') alert("Sensors Active!");
-        });
-    }
-
-    function openSettings() { document.getElementById('settings-overlay').style.display = 'block'; }
-    function closeSettings() { 
-        document.getElementById('settings-overlay').style.display = 'none';
-        app.declination = parseFloat(document.getElementById('inp-dec').value) || 0;
-        localStorage.setItem('omni_dec', app.declination);
-        updateDecDisplay();
-    }
-    
-    function autoDec() {
-        if(!app.lat) { alert("Waiting for GPS..."); return; }
-        window.open(`https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml?lat=${app.lat}&lon=${app.lng}`, '_blank');
-    }
-
-    function updateDecDisplay() {
-        const el = document.getElementById('mag-status');
-        if(app.declination !== 0) {
-            el.classList.add('active');
-            el.innerText = `True North (${app.declination > 0 ? '+' : ''}${app.declination})`;
+    // --- DATA & LOGIC ---
+    function requestSensors() {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(resp => { if(resp==='granted') alert("Sensors Active"); })
+                .catch(console.error);
         } else {
-            el.classList.remove('active');
-            el.innerText = "Mag North";
+            alert("Sensors likely active or not blocked on this device.");
         }
     }
 
-    // MAPPING
-    function initMap() {
-        map = L.map('map', {zoomControl:false}).setView([0,0], 2);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        markers = L.layerGroup().addTo(map);
-        
-        navigator.geolocation.watchPosition(p => {
-            app.lat = p.coords.latitude;
-            app.lng = p.coords.longitude;
-            if(!userSpot) {
-                userSpot = L.circleMarker([app.lat,app.lng], {color:'var(--accent)', radius:5}).addTo(map);
-                map.setView([app.lat,app.lng], 16);
-            } else userSpot.setLatLng([app.lat,app.lng]);
-        }, null, {enableHighAccuracy:true});
-        
-        renderList();
-    }
-
     function recordPoint() {
-        if(!app.lat) return alert("No GPS!");
+        if(!app.lat) { alert("Waiting for GPS..."); return; }
         const rec = {
             id: Date.now(),
             name: `Stn-${app.logs.length+1}`,
@@ -303,53 +377,96 @@
             t: new Date().toLocaleString()
         };
         app.logs.unshift(rec);
-        localStorage.setItem('omni_logs', JSON.stringify(app.logs));
-        renderList();
-        document.getElementById('main-readout').style.background = "#333";
-        setTimeout(()=>document.getElementById('main-readout').style.background="", 100);
+        localStorage.setItem('brunton_logs', JSON.stringify(app.logs));
+        renderLogs();
+        
+        // Flash Feedback
+        const panel = document.getElementById('main-readout');
+        panel.style.backgroundColor = "#222";
+        setTimeout(() => panel.style.backgroundColor = "", 150);
     }
 
-    function renderList() {
+    function renderLogs() {
         markers.clearLayers();
         const list = document.getElementById('logs-list');
         list.innerHTML = "";
         
         app.logs.forEach(l => {
-            L.marker([l.lat, l.lng]).bindPopup(`<b>${l.name}</b><br>${l.s}/${l.d}`).addTo(markers);
+            L.marker([l.lat, l.lng]).bindPopup(`<b>${l.name}</b><br>S:${l.s} D:${l.d}`).addTo(markers);
             
             const div = document.createElement('div');
-            div.className = 'log-entry';
+            div.className = 'log-item';
             div.innerHTML = `
                 <div>
-                    <strong>${l.name}</strong><br>
-                    <span style="color:var(--accent)">${l.s}/${l.d}</span> <small>(${l.dec}°)</small>
+                    <div style="font-weight:bold; color:white;">${l.name}</div>
+                    <div style="color:var(--accent); font-size:0.9rem;">S${l.s}° / D${l.d}° <span style="color:#666">(${l.dec}°)</span></div>
+                    <div style="font-size:0.7rem; color:#666;">${l.t}</div>
                 </div>
-                <button style="width:auto; background:#ff3b30; padding:5px 10px;" onclick="del(${l.id})">DEL</button>
+                <button class="btn btn-del" onclick="deleteLog(${l.id})">DEL</button>
             `;
             list.appendChild(div);
         });
     }
 
-    window.del = (id) => {
-        if(confirm("Delete?")) {
-            app.logs = app.logs.filter(x=>x.id!==id);
-            localStorage.setItem('omni_logs', JSON.stringify(app.logs));
-            renderList();
+    window.deleteLog = (id) => {
+        if(confirm("Delete this reading?")) {
+            app.logs = app.logs.filter(x => x.id !== id);
+            localStorage.setItem('brunton_logs', JSON.stringify(app.logs));
+            renderLogs();
         }
     }
-    
-    window.toggleData = () => {
-        const el = document.getElementById('data-overlay');
-        el.style.display = el.style.display==='block'?'none':'block';
+
+    // --- SETTINGS & MAPPING ---
+    function openSettings() { document.getElementById('settings-overlay').style.display = 'flex'; }
+    function closeSettings() { 
+        document.getElementById('settings-overlay').style.display = 'none';
+        app.declination = parseFloat(document.getElementById('inp-dec').value) || 0;
+        localStorage.setItem('brunton_dec', app.declination);
+        updateDecDisplay();
+    }
+    function updateDecDisplay() {
+        const pill = document.getElementById('mag-status');
+        if(app.declination !== 0) {
+            pill.classList.add('active');
+            pill.innerText = `True North (${app.declination > 0 ? '+' : ''}${app.declination})`;
+        } else {
+            pill.classList.remove('active');
+            pill.innerText = "Mag North";
+        }
+        document.getElementById('inp-dec').value = app.declination;
+    }
+    function autoDec() {
+        if(!app.lat) return alert("Wait for GPS");
+        window.open(`https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml?lat=${app.lat}&lon=${app.lng}`, '_blank');
     }
 
-    window.exportCSV = () => {
+    function toggleNotebook() {
+        const el = document.getElementById('notebook-overlay');
+        el.style.display = el.style.display === 'flex' ? 'none' : 'flex';
+        if(el.style.display === 'flex') renderLogs();
+    }
+
+    function exportCSV() {
         let csv = "Name,Strike,Dip,DipDir,Dec,Lat,Lng,Time\n" + 
-            app.logs.map(l=>`${l.name},${l.s},${l.d},${l.dd},${l.dec},${l.lat},${l.lng},"${l.t}"`).join('\n');
+            app.logs.map(l => `${l.name},${l.s},${l.d},${l.dd},${l.dec},${l.lat},${l.lng},"${l.t}"`).join('\n');
+        const blob = new Blob([csv], {type:'text/csv'});
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-        a.download = "survey.csv";
-        a.click();
+        a.href = url; a.download = "Brunton_Survey.csv"; a.click();
+    }
+
+    function initMap() {
+        map = L.map('map', {zoomControl:false}).setView([0,0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        markers = L.layerGroup().addTo(map);
+        navigator.geolocation.watchPosition(p => {
+            app.lat = p.coords.latitude;
+            app.lng = p.coords.longitude;
+            if(!userSpot) {
+                userSpot = L.circleMarker([app.lat, app.lng], {color:'var(--accent)', radius:6}).addTo(map);
+                map.setView([app.lat, app.lng], 18);
+            } else userSpot.setLatLng([app.lat, app.lng]);
+        }, null, {enableHighAccuracy:true});
     }
 </script>
 </body>
