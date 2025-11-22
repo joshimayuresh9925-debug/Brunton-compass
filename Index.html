@@ -450,4 +450,21 @@
     }
 
     // SETTINGS
-    function openSettings() { document.getElementById('settings-overlay').style.display = 'flex'; document.getElementById('inp-d
+    function openSettings() { document.getElementById('settings-overlay').style.display = 'flex'; document.getElementById('inp-dec').value = app.declination; }
+    function closeSettings() { 
+        document.getElementById('settings-overlay').style.display = 'none';
+        app.declination = parseFloat(document.getElementById('inp-dec').value) || 0;
+        localStorage.setItem('brunton_dec', app.declination);
+        updateDecDisplay();
+    }
+    function updateDecDisplay() {
+        const pill = document.getElementById('mag-status');
+        pill.innerText = app.declination === 0 ? "Mag North" : `True North (${app.declination})`;
+        pill.classList.toggle('active', app.declination !== 0);
+    }
+    function autoDec() { window.open(`https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml?lat=${app.lat}&lon=${app.lng}`, '_blank'); }
+    function requestSensors() { if(typeof DeviceOrientationEvent.requestPermission === 'function') DeviceOrientationEvent.requestPermission(); }
+
+</script>
+</body>
+</html>
