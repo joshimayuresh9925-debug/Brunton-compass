@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Brunton Omni v16 (Smooth)</title>
+<title>Brunton Omni v17</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
     /* --- THEME VARIABLES --- */
@@ -122,7 +122,7 @@
     #level-bubble {
         width: 30px; height: 30px; background: var(--accent); border-radius: 50%;
         position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        box-shadow: 0 0 10px rgba(0,0,0,0.3); transition: transform 0.1s linear;
         border: 2px solid rgba(255,255,255,0.2);
     }
 
@@ -273,20 +273,19 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    const DB_KEY = 'brunton_db_v16';
-    let db = { version: 16, settings: { theme: 'dark', declination: 0, calib: 0 }, projects: { 'Default': [] }, currentProject: 'Default' };
-    // SMOOTHING VARIABLES
+    const DB_KEY = 'brunton_db_v17';
+    let db = { version: 17, settings: { theme: 'dark', declination: 0, calib: 0 }, projects: { 'Default': [] }, currentProject: 'Default' };
     let smooth = { strike: 0, dip: 0, dipDir: 0, heading: 0, bubbleX: 0, bubbleY: 0 };
     let app = { lat: null, lng: null, minimized: false, isSat: false };
     let map, markers, userSpot, osmLayer, satLayer, editingId = null, tempClickLatLng = null;
-    const SMOOTH_FACTOR = 0.15; // 0.1 = Very Slow/Smooth, 0.9 = Fast/Jittery
+    const SMOOTH_FACTOR = 0.15;
 
     window.onload = () => {
         try {
             const s = localStorage.getItem(DB_KEY);
             if (s) db = JSON.parse(s);
             else {
-                const old = localStorage.getItem('brunton_db_v15');
+                const old = localStorage.getItem('brunton_db_v16');
                 if(old) db = JSON.parse(old);
                 saveDB();
             }
@@ -298,13 +297,13 @@
         initUI();
         updateDecDisplay();
         updateProjectDisplay();
-        loop(); // Start Animation Loop for Smoothing
+        loop(); 
     };
 
     function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
     function hardReset() { localStorage.clear(); location.reload(); }
 
-    // --- UI ---
+    // --- UI LOGIC ---
     function initUI() {
         const handle = document.getElementById('drag-area');
         handle.addEventListener('click', togglePanel);
@@ -336,11 +335,12 @@
         map.flyTo(newCenterLatLng, currentZoom, { animate: true, duration: 0.5 });
     }
 
-    // --- SENSORS & MATH ---
+    // --- MATH ---
     const rad = Math.PI / 180;
     const deg = 180 / Math.PI;
+    
+    function normalizeAngle(deg) { return ((deg % 360) + 360) % 360; }
 
-    // Helper to smooth angles across 0/360 boundary
     function lerpAngle(current, target, factor) {
         let diff = target - current;
         while (diff > 180) diff -= 360;
@@ -349,8 +349,8 @@
     }
     function lerp(current, target, factor) { return current + (target - current) * factor; }
 
+    // --- SENSORS ---
     function initSensors() {
-        // PRIORITIZE absolute orientation for Android (Compass fix)
         if ('ondeviceorientationabsolute' in window) {
             window.addEventListener('deviceorientationabsolute', handleOrientation, true);
         } else if ('ondeviceorientation' in window) {
@@ -359,10 +359,9 @@
     }
 
     function handleOrientation(e) {
-        let alpha = e.webkitCompassHeading || (e.absolute ? e.alpha : e.alpha); // Try for absolute
+        let alpha = e.webkitCompassHeading || (e.absolute ? e.alpha : e.alpha);
         if (alpha == null) return;
         
-        // Basic Vector Math
         const _z = (alpha + (db.settings.calib||0)) * rad;
         const _x = e.beta * rad;
         const _y = e.gamma * rad;
@@ -371,29 +370,23 @@
         const cX = Math.cos(_x), sX = Math.sin(_x);
         const cY = Math.cos(_y), sY = Math.sin(_y);
 
-        // Normal Vector (Z axis of phone)
         let nx = cZ * sY - sZ * sX * cY;
         let ny = sZ * sY + cZ * sX * cY;
         let nz = cX * cY;
 
-        // Bubble Vector (Gravity relative to phone screen)
         let bx = -sY * cX;
         let by = sX;
 
-        // Screen Rotation Comp
         const ang = window.screen.orientation ? window.screen.orientation.angle : 0;
         if(ang !== 0) {
             const sa = -ang * rad;
             const c = Math.cos(sa), s = Math.sin(sa);
-            // Rotate Bubble
             const tbx = bx * c - by * s;
             const tby = bx * s + by * c;
             bx = tbx; by = tby;
-            // Heading offset
             alpha += ang;
         }
 
-        // Calculate Targets
         let dip = Math.acos(Math.abs(nz)) * deg;
         let azimuth = Math.atan2(nx, ny) * deg;
         if(azimuth < 0) azimuth += 360;
@@ -402,16 +395,14 @@
         let trueDipDir = (dipDirRaw + db.settings.declination) % 360;
         let strike = (trueDipDir - 90 + 360) % 360;
 
-        // Store TARGET values for smoothing loop
         app.targetStrike = strike;
         app.targetDip = dip;
         app.targetDipDir = trueDipDir;
-        app.targetHeading = alpha + db.settings.declination; // For Compass Rose
+        app.targetHeading = alpha + db.settings.declination;
         app.targetBx = bx; 
         app.targetBy = by;
     }
 
-    // --- ANIMATION LOOP (60fps Smoothing) ---
     function loop() {
         if(app.targetStrike !== undefined) {
             smooth.strike = lerpAngle(smooth.strike, app.targetStrike, SMOOTH_FACTOR);
@@ -426,14 +417,16 @@
     }
 
     function updateUI() {
-        // Text
-        document.getElementById('val-strike').innerText = Math.round(smooth.strike) + "°";
-        document.getElementById('val-dip').innerText = Math.round(smooth.dip) + "°";
-        document.getElementById('val-dipdir').innerText = Math.round(smooth.dipDir) + "°";
-        document.getElementById('mini-s').innerText = Math.round(smooth.strike) + "°";
-        document.getElementById('mini-d').innerText = Math.round(smooth.dip) + "°";
+        const s = Math.round(normalizeAngle(smooth.strike));
+        const d = Math.round(smooth.dip);
+        const dd = Math.round(normalizeAngle(smooth.dipDir));
+        
+        document.getElementById('val-strike').innerText = s + "°";
+        document.getElementById('val-dip').innerText = d + "°";
+        document.getElementById('val-dipdir').innerText = dd + "°";
+        document.getElementById('mini-s').innerText = s + "°";
+        document.getElementById('mini-d').innerText = d + "°";
 
-        // Bubble
         const bubble = document.getElementById('level-bubble');
         let bpx = -smooth.bubbleX * 75; 
         let bpy = smooth.bubbleY * 75; 
@@ -441,11 +434,10 @@
         if (dist > 80) { bpx *= 80/dist; bpy *= 80/dist; }
         bubble.style.transform = `translate(calc(-50% + ${bpx}px), calc(-50% + ${bpy}px))`;
 
-        // Compass Rose
         document.getElementById('compass-rose').style.transform = `rotate(${-smooth.heading}deg)`;
     }
 
-    // --- MAP & OTHER ---
+    // --- MAP ---
     function initMap() {
         map = L.map('map', {zoomControl:false}).setView([0,0], 2);
         osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
@@ -476,7 +468,10 @@
         const logs = db.projects[db.currentProject];
         logs.unshift({
             id: Date.now(), type: 'geo', name: `Stn-${logs.length+1}`, note: '',
-            s: Math.round(smooth.strike), d: Math.round(smooth.dip), dd: Math.round(smooth.dipDir), lat: app.lat, lng: app.lng, t: new Date().toLocaleString()
+            s: Math.round(normalizeAngle(smooth.strike)), 
+            d: Math.round(smooth.dip), 
+            dd: Math.round(normalizeAngle(smooth.dipDir)), 
+            lat: app.lat, lng: app.lng, t: new Date().toLocaleString()
         });
         saveDB(); renderLogs();
         const el = app.minimized ? document.getElementById('mini-header') : document.getElementById('full-content');
@@ -539,14 +534,7 @@
     function downloadFile(c, e, t) { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([c],{type:t})); a.download=`${db.currentProject}.${e}`; a.click(); }
     function autoDec() { window.open(`https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml?lat=${app.lat}&lon=${app.lng}`,'_blank'); }
     
-    function calibrateCompass() {
-        // Capture current alpha as offset to 0
-        // Simple zeroing logic for visualizer if really broken
-        // But actually, just reset the offset to 0
-        db.settings.calib = 0; 
-        saveDB();
-        alert("Compass Reset. Please wave phone in figure-8 to calibrate hardware.");
-    }
+    function calibrateCompass() { db.settings.calib = 0; saveDB(); alert("Compass Reset. Please wave phone in figure-8."); }
 </script>
 </body>
 </html>
