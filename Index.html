@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Brunton Omni v17</title>
+<title>Brunton Omni v18 (True Brunton)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
     /* --- THEME VARIABLES --- */
@@ -104,26 +104,50 @@
         position: relative; overflow: hidden;
     }
 
-    #compass-rose {
+    /* --- BRUNTON LAYOUT (Fixed Ring) --- */
+    #compass-face {
         width: 100%; height: 100%; position: absolute; top: 0; left: 0;
-        /* No transition here, we handle smooth in JS */
+        /* No rotation for the face anymore */
     }
     .cardinal { position: absolute; font-weight: 700; font-size: 0.8rem; color: var(--sub); }
-    #north-marker { top: 10px; left: 50%; transform: translateX(-50%); color: var(--danger); font-size: 1rem; }
+    
+    /* Reversed East/West for Brunton Direct Reading */
+    #north-marker { top: 10px; left: 50%; transform: translateX(-50%); color: var(--sub); }
     #south-marker { bottom: 10px; left: 50%; transform: translateX(-50%); }
-    #east-marker { top: 50%; right: 10px; transform: translateY(-50%); }
-    #west-marker { top: 50%; left: 10px; transform: translateY(-50%); }
+    #east-marker { top: 50%; left: 10px; transform: translateY(-50%); } /* E on LEFT */
+    #west-marker { top: 50%; right: 10px; transform: translateY(-50%); } /* W on RIGHT */
 
-    #crosshair {
-        position: absolute; top: 50%; left: 50%; width: 8px; height: 8px;
-        border: 2px solid var(--sub); border-radius: 50%; transform: translate(-50%, -50%); opacity: 0.5;
+    /* The Needle (Rotates) */
+    #compass-needle {
+        position: absolute; top: 50%; left: 50%; width: 6px; height: 120px;
+        transform: translate(-50%, -50%);
+        transition: transform 0.1s linear;
+        z-index: 5;
+    }
+    /* North Half (Red) */
+    #needle-n {
+        position: absolute; top: 0; left: 0; width: 100%; height: 50%;
+        background: var(--danger); border-top-left-radius: 3px; border-top-right-radius: 3px;
+    }
+    /* South Half (White) */
+    #needle-s {
+        position: absolute; bottom: 0; left: 0; width: 100%; height: 50%;
+        background: #fff; border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
+    }
+    /* Pivot */
+    #needle-pivot {
+        position: absolute; top: 50%; left: 50%; width: 12px; height: 12px;
+        background: var(--border); border-radius: 50%; border: 2px solid var(--bg);
+        transform: translate(-50%, -50%); z-index: 6;
     }
 
+    /* Bubble (Moves with Tilt) */
     #level-bubble {
         width: 30px; height: 30px; background: var(--accent); border-radius: 50%;
         position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
         box-shadow: 0 0 10px rgba(0,0,0,0.3); transition: transform 0.1s linear;
         border: 2px solid rgba(255,255,255,0.2);
+        z-index: 2; /* Behind needle */
     }
 
     /* Cards */
@@ -195,14 +219,18 @@
         <div id="full-content">
             <div id="visualizer-container">
                 <div id="level-housing">
-                    <div id="compass-rose">
+                    <div id="compass-face">
                         <div id="north-marker" class="cardinal">N</div>
                         <div id="south-marker" class="cardinal">S</div>
-                        <div id="east-marker" class="cardinal">E</div>
-                        <div id="west-marker" class="cardinal">W</div>
-                    </div>
-                    <div id="crosshair"></div>
+                        <div id="east-marker" class="cardinal">E</div> <div id="west-marker" class="cardinal">W</div> </div>
+                    
                     <div id="level-bubble"></div>
+
+                    <div id="compass-needle">
+                        <div id="needle-n"></div>
+                        <div id="needle-s"></div>
+                    </div>
+                    <div id="needle-pivot"></div>
                 </div>
             </div>
             <div class="data-row">
@@ -251,7 +279,7 @@
                 <button class="btn" style="width:80px;" onclick="autoDec()">Auto</button>
             </div>
             <div style="margin-top:20px;">
-                <button class="btn" style="width:100%; margin-bottom:10px;" onclick="calibrateCompass()">CALIBRATE COMPASS (Reset N)</button>
+                <button class="btn" style="width:100%; margin-bottom:10px;" onclick="calibrateCompass()">CALIBRATE COMPASS</button>
                 <button class="btn" style="width:100%; background:var(--danger); color:white;" onclick="hardReset()">HARD RESET APP</button>
             </div>
         </div>
@@ -273,8 +301,8 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    const DB_KEY = 'brunton_db_v17';
-    let db = { version: 17, settings: { theme: 'dark', declination: 0, calib: 0 }, projects: { 'Default': [] }, currentProject: 'Default' };
+    const DB_KEY = 'brunton_db_v18';
+    let db = { version: 18, settings: { theme: 'dark', declination: 0, calib: 0 }, projects: { 'Default': [] }, currentProject: 'Default' };
     let smooth = { strike: 0, dip: 0, dipDir: 0, heading: 0, bubbleX: 0, bubbleY: 0 };
     let app = { lat: null, lng: null, minimized: false, isSat: false };
     let map, markers, userSpot, osmLayer, satLayer, editingId = null, tempClickLatLng = null;
@@ -285,7 +313,7 @@
             const s = localStorage.getItem(DB_KEY);
             if (s) db = JSON.parse(s);
             else {
-                const old = localStorage.getItem('brunton_db_v16');
+                const old = localStorage.getItem('brunton_db_v17');
                 if(old) db = JSON.parse(old);
                 saveDB();
             }
@@ -340,7 +368,6 @@
     const deg = 180 / Math.PI;
     
     function normalizeAngle(deg) { return ((deg % 360) + 360) % 360; }
-
     function lerpAngle(current, target, factor) {
         let diff = target - current;
         while (diff > 180) diff -= 360;
@@ -377,6 +404,7 @@
         let bx = -sY * cX;
         let by = sX;
 
+        // Landscape Fix
         const ang = window.screen.orientation ? window.screen.orientation.angle : 0;
         if(ang !== 0) {
             const sa = -ang * rad;
@@ -398,6 +426,11 @@
         app.targetStrike = strike;
         app.targetDip = dip;
         app.targetDipDir = trueDipDir;
+        // Heading for needle: Raw Azimuth + Declination
+        // Azimuth = where phone top points relative to North.
+        // If Phone points East (90), Needle must point Left (-90).
+        // So Heading = Azimuth.
+        // Wait, alpha is heading. 
         app.targetHeading = alpha + db.settings.declination;
         app.targetBx = bx; 
         app.targetBy = by;
@@ -434,10 +467,11 @@
         if (dist > 80) { bpx *= 80/dist; bpy *= 80/dist; }
         bubble.style.transform = `translate(calc(-50% + ${bpx}px), calc(-50% + ${bpy}px))`;
 
-        document.getElementById('compass-rose').style.transform = `rotate(${-smooth.heading}deg)`;
+        // Rotate Needle: Negative heading to counter-rotate
+        document.getElementById('compass-needle').style.transform = `translate(-50%, -50%) rotate(${-smooth.heading}deg)`;
     }
 
-    // --- MAP ---
+    // --- MAP & APP ---
     function initMap() {
         map = L.map('map', {zoomControl:false}).setView([0,0], 2);
         osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19});
