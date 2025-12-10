@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Brunton Omni v18 (True Brunton)</title>
+<title>Brunton Omni v19 (Smart Calib)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
     /* --- THEME VARIABLES --- */
@@ -11,12 +11,14 @@
         --bg: #000000;
         --panel: #1c1c1e; --text: #ffffff; --sub: #888;
         --accent: #ff9f0a; --poi: #0a84ff; --danger: #ff453a;
+        --success: #32d74b;
         --border: #333; --header-h: 56px;
     }
     [data-theme="light"] {
         --bg: #f2f2f7; --panel: #ffffff; --text: #000000;
         --sub: #666;
         --accent: #ff9500; --poi: #007aff; --danger: #ff3b30;
+        --success: #34c759;
         --border: #d1d1d6;
     }
     body { 
@@ -24,46 +26,44 @@
         background: #000; color: var(--text); margin: 0; height: 100vh; width: 100vw;
         overflow: hidden;
     }
-    .flex-row { display: flex;
-        align-items: center; }
+    .flex-row { display: flex; align-items: center; }
+    
     /* LAYERS */
-    #map-layer { position: fixed; top: 0; left: 0;
-        width: 100%; height: 100%; z-index: 1; }
-    #map { width: 100%; height: 100%; background: #333;
-    }
-    #controls-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;
-    }
+    #map-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+    #map { width: 100%; height: 100%; background: #333; }
+    #controls-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
     .interactive { pointer-events: auto; }
+    
     /* Header */
     #header {
-        position: absolute;
-        top: 0; left: 0; width: 100%; height: var(--header-h);
+        position: absolute; top: 0; left: 0; width: 100%; height: var(--header-h);
         padding: 0 16px; box-sizing: border-box;
         background: var(--panel); border-bottom: 1px solid var(--border);
         display: flex; justify-content: space-between; align-items: center;
         transition: background 0.3s;
     }
-    .project-select { font-weight: 800; font-size: 1.1rem;
-        cursor: pointer; display: flex; align-items: center; gap: 5px; }
-    .project-select span { color: var(--accent);
-    }
+    .project-select { font-weight: 800; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+    .project-select span { color: var(--accent); }
     .status-pill { 
-        font-size: 0.7rem; padding: 4px 12px;
-        border-radius: 20px; 
+        font-size: 0.7rem; padding: 4px 12px; border-radius: 20px; 
         background: var(--bg); color: var(--sub); font-weight: 600; border: 1px solid var(--border);
     }
-    .status-pill.active { background: var(--accent);
-        color: #000; border-color: var(--accent); }
+    .status-pill.active { background: var(--accent); color: #000; border-color: var(--accent); }
+    
     /* Buttons */
-    #layer-btn {
-        position: absolute;
-        top: 70px; right: 16px;
+    .side-btn {
+        position: absolute; right: 16px;
         background: var(--panel); color: var(--text); border: 2px solid var(--border);
         width: 44px; height: 44px; border-radius: 10px; 
-        display: flex;
-        justify-content: center; align-items: center; cursor: pointer;
+        display: flex; justify-content: center; align-items: center; cursor: pointer;
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
+    #layer-btn { top: 70px; }
+    
+    /* Bump Toggle Button */
+    #bump-btn { top: 125px; }
+    #bump-btn.active { border-color: var(--success); color: var(--success); background: rgba(50, 215, 75, 0.15); }
+    
     #fab-record {
         position: absolute; bottom: 90px; right: 20px;
         width: 64px; height: 64px; border-radius: 50%; border: none;
@@ -73,170 +73,113 @@
         transform: scale(0);
         transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    body.panel-minimized #fab-record { transform: scale(1);
-    }
+    body.panel-minimized #fab-record { transform: scale(1); }
+    
     /* COMPASS PANEL */
     #compass-container {
-        position: fixed;
-        bottom: 0; left: 0; width: 100%;
+        position: fixed; bottom: 0; left: 0; width: 100%;
         background: var(--panel); border-top: 1px solid var(--border);
         border-top-left-radius: 24px; border-top-right-radius: 24px;
         box-shadow: 0 -4px 30px rgba(0,0,0,0.5); z-index: 20;
         transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1);
         transform: translateY(0); display: flex; flex-direction: column;
     }
-    #compass-container.minimized { transform: translateY(calc(100% - 64px));
-    }
+    #compass-container.minimized { transform: translateY(calc(100% - 64px)); }
     #drag-area {
-        width: 100%; height: 40px; display: flex;
-        justify-content: center; align-items: center;
+        width: 100%; height: 40px; display: flex; justify-content: center; align-items: center;
         cursor: pointer; position: absolute; top: 0; left: 0; z-index: 30; background: transparent;
     }
-    #drag-pill { width: 40px; height: 5px; background: var(--sub); border-radius: 10px; opacity: 0.5;
-    }
+    #drag-pill { width: 40px; height: 5px; background: var(--sub); border-radius: 10px; opacity: 0.5; }
+    
     #mini-header {
-        height: 64px; display: flex; align-items: center;
-        justify-content: space-around;
+        height: 64px; display: flex; align-items: center; justify-content: space-around;
         border-bottom: 1px solid var(--border); width: 100%; padding-top: 15px; box-sizing: border-box;
     }
-    .mini-val { font-size: 1.2rem;
-        font-weight: bold; color: var(--accent); font-variant-numeric: tabular-nums; }
-    .mini-lbl { font-size: 0.7rem; color: var(--sub); margin-right: 6px;
-    }
+    .mini-val { font-size: 1.2rem; font-weight: bold; color: var(--accent); font-variant-numeric: tabular-nums; }
+    .mini-lbl { font-size: 0.7rem; color: var(--sub); margin-right: 6px; }
+    
     #full-content {
-        padding: 0 10px 30px 10px; display: flex;
-        flex-direction: column; align-items: center; gap: 10px;
+        padding: 0 10px 30px 10px; display: flex; flex-direction: column; align-items: center; gap: 10px;
         opacity: 1; transition: opacity 0.2s;
     }
-    #compass-container.minimized #full-content { opacity: 0;
-        pointer-events: none; }
-    /* VISUALIZER */
-    #visualizer-container { width: 180px; height: 180px; position: relative;
-        margin-top: 10px; }
+    #compass-container.minimized #full-content { opacity: 0; pointer-events: none; }
     
+    /* VISUALIZER */
+    #visualizer-container { width: 180px; height: 180px; position: relative; margin-top: 10px; }
     #level-housing {
-        width: 100%;
-        height: 100%; border-radius: 50%; border: 2px solid var(--border);
+        width: 100%; height: 100%; border-radius: 50%; border: 2px solid var(--border);
         background: radial-gradient(circle, var(--panel) 0%, var(--bg) 100%); 
         position: relative; overflow: hidden;
     }
-    /* --- BRUNTON LAYOUT (Fixed Ring) --- */
-    #compass-face {
-        width: 100%;
-        height: 100%; position: absolute; top: 0; left: 0;
-        /* No rotation for the face anymore */
-    }
-    .cardinal { position: absolute;
-        font-weight: 700; font-size: 0.8rem; color: var(--sub); }
+    #compass-face { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+    .cardinal { position: absolute; font-weight: 700; font-size: 0.8rem; color: var(--sub); }
     
-    /* Reversed East/West for Brunton Direct Reading */
-    #north-marker { top: 10px;
-        left: 50%; transform: translateX(-50%); color: var(--sub); }
-    #south-marker { bottom: 10px; left: 50%; transform: translateX(-50%);
-    }
-    #east-marker { top: 50%; left: 10px; transform: translateY(-50%);
-    } /* E on LEFT */
-    #west-marker { top: 50%; right: 10px; transform: translateY(-50%);
-    } /* W on RIGHT */
-    /* The Needle (Rotates) */
+    #north-marker { top: 10px; left: 50%; transform: translateX(-50%); color: var(--sub); }
+    #south-marker { bottom: 10px; left: 50%; transform: translateX(-50%); }
+    #east-marker { top: 50%; left: 10px; transform: translateY(-50%); }
+    #west-marker { top: 50%; right: 10px; transform: translateY(-50%); }
+    
     #compass-needle {
-        position: absolute;
-        top: 50%; left: 50%; width: 6px; height: 120px;
-        transform: translate(-50%, -50%);
-        transition: transform 0.1s linear;
-        z-index: 5;
+        position: absolute; top: 50%; left: 50%; width: 6px; height: 120px;
+        transform: translate(-50%, -50%); transition: transform 0.1s linear; z-index: 5;
     }
-    /* North Half (Red) */
-    #needle-n {
-        position: absolute;
-        top: 0; left: 0; width: 100%; height: 50%;
-        background: var(--danger); border-top-left-radius: 3px; border-top-right-radius: 3px;
-    }
-    /* South Half (White) */
-    #needle-s {
-        position: absolute;
-        bottom: 0; left: 0; width: 100%; height: 50%;
-        background: #fff; border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
-    }
-    /* Pivot */
+    #needle-n { position: absolute; top: 0; left: 0; width: 100%; height: 50%; background: var(--danger); border-top-left-radius: 3px; border-top-right-radius: 3px; }
+    #needle-s { position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; background: #fff; border-bottom-left-radius: 3px; border-bottom-right-radius: 3px; }
     #needle-pivot {
-        position: absolute;
-        top: 50%; left: 50%; width: 12px; height: 12px;
+        position: absolute; top: 50%; left: 50%; width: 12px; height: 12px;
         background: var(--border); border-radius: 50%; border: 2px solid var(--bg);
-        transform: translate(-50%, -50%);
-        z-index: 6;
+        transform: translate(-50%, -50%); z-index: 6;
     }
-    /* Bubble (Moves with Tilt) */
     #level-bubble {
-        width: 30px;
-        height: 30px; background: var(--accent); border-radius: 50%;
+        width: 30px; height: 30px; background: var(--accent); border-radius: 50%;
         position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        box-shadow: 0 0 10px rgba(0,0,0,0.3);
-        transition: transform 0.1s linear;
-        border: 2px solid rgba(255,255,255,0.2);
-        z-index: 2;
-        /* Behind needle */
+        box-shadow: 0 0 10px rgba(0,0,0,0.3); transition: transform 0.1s linear;
+        border: 2px solid rgba(255,255,255,0.2); z-index: 2;
     }
+    
     /* Cards */
-    .data-row { display: flex;
-        width: 100%; justify-content: center; gap: 10px; }
-    .card {
-        background: var(--bg);
-        padding: 10px; border-radius: 12px; text-align: center; flex: 1;
-        max-width: 140px; border: 1px solid var(--border);
-    }
-    .card-label { font-size: 0.65rem; color: var(--sub); margin-bottom: 2px; text-transform: uppercase;
-    }
-    .card-val { font-size: 2.2rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1;
-    }
-    .btn-grid { width: 100%; display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 8px; margin-top: 5px;
-    }
+    .data-row { display: flex; width: 100%; justify-content: center; gap: 10px; }
+    .card { background: var(--bg); padding: 10px; border-radius: 12px; text-align: center; flex: 1; max-width: 140px; border: 1px solid var(--border); }
+    .card-label { font-size: 0.65rem; color: var(--sub); margin-bottom: 2px; text-transform: uppercase; }
+    .card-val { font-size: 2.2rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+    
+    .btn-grid { width: 100%; display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 8px; margin-top: 5px; }
     .btn {
-        border: none; padding: 12px 0; border-radius: 8px;
-        font-weight: 700; cursor: pointer; 
+        border: none; padding: 12px 0; border-radius: 8px; font-weight: 700; cursor: pointer; 
         font-size: 0.85rem; color: var(--text); background: var(--bg); border: 1px solid var(--border);
     }
     .btn:active { transform: scale(0.96); }
-    .btn-primary { background: var(--accent); color: #000; border: none;
-    }
+    .btn-primary { background: var(--accent); color: #000; border: none; }
+    
     /* Modals */
     .overlay {
-        position: fixed;
-        inset: 0; background: rgba(0,0,0,0.85); z-index: 5000;
+        position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 5000;
         display: none; flex-direction: column; padding: 20px; overflow-y: auto; backdrop-filter: blur(5px);
     }
-    .overlay-content { background: var(--panel); padding: 20px; border-radius: 18px; border: 1px solid var(--border);
-    }
-    .overlay-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
-    }
-    .overlay h2 { margin: 0; color: var(--accent); font-size: 1.3rem;
-    }
+    .overlay-content { background: var(--panel); padding: 20px; border-radius: 18px; border: 1px solid var(--border); }
+    .overlay-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .overlay h2 { margin: 0; color: var(--accent); font-size: 1.3rem; }
     
     input, textarea, select { 
-        width: 100%;
-        padding: 14px; background: var(--bg); border: 1px solid var(--border); 
+        width: 100%; padding: 14px; background: var(--bg); border: 1px solid var(--border); 
         color: var(--text); border-radius: 8px; box-sizing: border-box; font-size: 1rem; margin-bottom: 10px;
     }
     
     .log-item {
-        background: var(--bg);
-        padding: 12px; margin-bottom: 8px; border-radius: 10px;
+        background: var(--bg); padding: 12px; margin-bottom: 8px; border-radius: 10px;
         display: flex; justify-content: space-between; align-items: flex-start; border: 1px solid var(--border); border-left-width: 4px;
     }
     .log-item.type-geo { border-left-color: var(--accent); }
-    .log-item.type-poi { border-left-color: var(--poi);
-    }
-    .btn-sm { padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; background: var(--border); color: var(--text);
-        border:none;}
-    .proj-item { padding: 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; cursor: pointer;
-    }
+    .log-item.type-poi { border-left-color: var(--poi); }
+    .btn-sm { padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; background: var(--border); color: var(--text); border:none;}
+    .proj-item { padding: 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; cursor: pointer; }
     .proj-item.active { color: var(--accent); font-weight: bold; }
-    .geo-symbol { background: transparent; border: none;
-    }
+    .geo-symbol { background: transparent; border: none; }
 </style>
 </head>
 <body>
     <div id="map-layer"><div id="map"></div></div>
+    
     <div id="controls-layer">
         <div id="header" class="interactive">
             <div class="project-select" onclick="openProjects()">
@@ -244,45 +187,49 @@
             </div>
             <div id="mag-status" class="status-pill" onclick="openSettings()">Mag North</div>
         </div>
-        <button id="layer-btn" 
-        class="interactive" onclick="toggleLayer()">
+        
+        <button id="layer-btn" class="side-btn interactive" onclick="toggleLayer()">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
         </button>
+        
+        <button id="bump-btn" class="side-btn interactive" onclick="toggleBump()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="5" y="4" width="14" height="16" rx="2" ry="2"></rect>
+                <line x1="12" y1="17" x2="12" y2="17" stroke-linecap="round" stroke-width="3"></line>
+                <path d="M19 8L22 8" stroke-width="2"></path>
+            </svg>
+        </button>
+        
         <button id="fab-record" class="interactive" onclick="recordPoint()">REC</button>
     </div>
+
     <div id="compass-container">
         <div id="drag-area"><div id="drag-pill"></div></div>
         <div id="mini-header">
             <div class="flex-row"><span class="mini-lbl">STR</span><span id="mini-s" class="mini-val">000</span></div>
-    
             <div class="flex-row"><span class="mini-lbl">DIP</span><span id="mini-d" class="mini-val">00</span></div>
         </div>
         <div id="full-content">
             <div id="visualizer-container">
                 <div id="level-housing">
                     <div id="compass-face">
-                    
                         <div id="north-marker" class="cardinal">N</div>
                         <div id="south-marker" class="cardinal">S</div>
-                        <div id="east-marker" class="cardinal">E</div> <div id="west-marker" class="cardinal">W</div> </div>
-                    
-                  
+                        <div id="east-marker" class="cardinal">E</div> <div id="west-marker" class="cardinal">W</div> 
+                    </div>
                     <div id="level-bubble"></div>
                     <div id="compass-needle">
                         <div id="needle-n"></div>
                         <div id="needle-s"></div>
                     </div>
-      
                     <div id="needle-pivot"></div>
                 </div>
             </div>
             <div class="data-row">
                 <div class="card"><div class="card-label">Strike</div><div id="val-strike" class="card-val">---</div></div>
                 <div class="card"><div class="card-label">Dip</div><div id="val-dip" class="card-val">---</div></div>
-    
             </div>
-            <div style="font-size: 0.8rem;
-                color: var(--sub);">Dip Direction: <span id="val-dipdir" style="color:var(--text); font-weight:bold;">---</span></div>
+            <div style="font-size: 0.8rem; color: var(--sub);">Dip Direction: <span id="val-dipdir" style="color:var(--text); font-weight:bold;">---</span></div>
             <div class="btn-grid">
                 <button class="btn btn-primary" onclick="recordPoint()">RECORD</button>
                 <button class="btn" onclick="toggleNotebook()">DATA</button>
@@ -294,84 +241,106 @@
     <div id="project-overlay" class="overlay" style="justify-content:center;">
         <div class="overlay-content">
             <div class="overlay-header"><h2>Projects</h2><button class="btn-sm" onclick="closeProjects()">Close</button></div>
-            <div id="project-list" style="max-height:200px;
-                overflow-y:auto; margin-bottom:15px; border:1px solid var(--border); border-radius:8px;"></div>
+            <div id="project-list" style="max-height:200px; overflow-y:auto; margin-bottom:15px; border:1px solid var(--border); border-radius:8px;"></div>
             <div class="flex-row" style="gap:10px;">
                 <input type="text" id="new-proj-name" placeholder="New Project Name" style="margin-bottom:0;">
-                <button class="btn btn-primary" style="width:auto;
-                padding:0 20px;" onclick="createProject()">Add</button>
+                <button class="btn btn-primary" style="width:auto; padding:0 20px;" onclick="createProject()">Add</button>
             </div>
         </div>
     </div>
+
     <div id="notebook-overlay" class="overlay">
         <div class="overlay-content" style="min-height:80%;">
             <div class="overlay-header"><h2>Data Logs</h2><button class="btn-sm" onclick="toggleNotebook()">Close</button></div>
-            <div style="display:flex;
-                gap:10px; margin-bottom:15px;">
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
                 <button class="btn" onclick="exportCSV()">CSV</button>
                 <button class="btn" onclick="exportKML()">KML</button>
             </div>
             <div id="logs-list"></div>
         </div>
     </div>
+
     <div id="settings-overlay" class="overlay" style="justify-content:center;">
         <div class="overlay-content">
-          
             <div class="overlay-header"><h2>Config</h2><button class="btn-sm" onclick="closeSettings()">Done</button></div>
-            <label style="color:var(--sub);
-                font-size:0.8rem;">THEME</label>
-            <button class="btn" style="width:100%;
-                margin-bottom:20px;" onclick="toggleTheme()" id="theme-btn">Switch Theme</button>
-            <label style="color:var(--sub);
-                font-size:0.8rem;">DECLINATION</label>
+            
+            <label style="color:var(--sub); font-size:0.8rem;">THEME</label>
+            <button class="btn" style="width:100%; margin-bottom:20px;" onclick="toggleTheme()" id="theme-btn">Switch Theme</button>
+            
+            <label style="color:var(--sub); font-size:0.8rem;">DECLINATION</label>
             <div class="flex-row" style="gap:10px;">
                 <input type="number" id="inp-dec" placeholder="0.0">
                 <button class="btn" style="width:80px;" onclick="autoDec()">Auto</button>
             </div>
+
             <div style="margin-top:20px;">
-                <button class="btn" style="width:100%;
-                    margin-bottom:10px;" onclick="calibrateCompass()">CALIBRATE COMPASS</button>
-                <button class="btn" style="width:100%;
-                    background:var(--danger); color:white;" onclick="hardReset()">HARD RESET APP</button>
+                <label style="color:var(--sub); font-size:0.8rem;">SENSORS</label>
+                <button class="btn" style="width:100%; margin-bottom:10px; border-color:var(--success); color:var(--success);" onclick="calibrateBump()">CALIBRATE FLATNESS (BUMP)</button>
+                <div style="font-size:0.7rem; color:var(--sub); margin-bottom:15px;">Place on flat surface to zero-out camera bump tilt.</div>
+
+                <button class="btn" style="width:100%; margin-bottom:10px;" onclick="calibrateCompass()">RESET COMPASS</button>
+                <button class="btn" style="width:100%; background:var(--danger); color:white;" onclick="hardReset()">HARD RESET APP</button>
             </div>
         </div>
     </div>
+
     <div id="edit-overlay" class="overlay" style="justify-content:center;">
         <div class="overlay-content">
             <div class="overlay-header"><h2>Edit</h2><button class="btn-sm" onclick="closeEdit()">Cancel</button></div>
             <input type="text" id="edit-name"><textarea id="edit-note" placeholder="Notes..."></textarea><button class="btn btn-primary" style="width:100%;" onclick="saveEdit()">SAVE</button>
         </div>
     </div>
+
     <div id="poi-overlay" class="overlay" style="justify-content:center;">
-  
         <div class="overlay-content">
             <div class="overlay-header"><h2 style="color:var(--poi)">Mark</h2><button class="btn-sm" onclick="closePoi()">Cancel</button></div>
-            <input type="text" id="poi-name" placeholder="Name"><textarea id="poi-note" placeholder="Desc..."></textarea><button class="btn" style="width:100%;
-                background:var(--poi); color:white;" onclick="savePoi()">ADD</button>
+            <input type="text" id="poi-name" placeholder="Name"><textarea id="poi-note" placeholder="Desc..."></textarea><button class="btn" style="width:100%; background:var(--poi); color:white;" onclick="savePoi()">ADD</button>
         </div>
     </div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    const DB_KEY = 'brunton_db_v18';
-    let db = { version: 18, settings: { theme: 'dark', declination: 0, calib: 0 }, projects: { 'Default': [] }, currentProject: 'Default' };
+    const DB_KEY = 'brunton_db_v19';
+    // DB Structure Update: 'bump' object for camera offset calibration
+    let db = { 
+        version: 19, 
+        settings: { 
+            theme: 'dark', 
+            declination: 0, 
+            calib: 0,
+            bump: { active: false, b: 0, g: 0 } // b=beta offset, g=gamma offset
+        }, 
+        projects: { 'Default': [] }, 
+        currentProject: 'Default' 
+    };
+    
     let smooth = { strike: 0, dip: 0, dipDir: 0, heading: 0, bubbleX: 0, bubbleY: 0 };
-    let app = { lat: null, lng: null, minimized: false, isSat: false };
+    let app = { lat: null, lng: null, minimized: false, isSat: false, rawBeta: 0, rawGamma: 0 };
     let map, markers, userSpot, osmLayer, satLayer, editingId = null, tempClickLatLng = null;
  
     const SMOOTH_FACTOR = 0.15;
+    
     window.onload = () => {
         try {
             const s = localStorage.getItem(DB_KEY);
-            if (s) db = JSON.parse(s);
-            else {
-                const old = localStorage.getItem('brunton_db_v17');
-              
-                if(old) db = JSON.parse(old);
+            if (s) {
+                let loaded = JSON.parse(s);
+                // Migration check
+                if(!loaded.settings.bump) loaded.settings.bump = { active: false, b: 0, g: 0 };
+                db = loaded;
+            } else {
+                const old = localStorage.getItem('brunton_db_v18');
+                if(old) {
+                    db = JSON.parse(old);
+                    db.version = 19;
+                    db.settings.bump = { active: false, b: 0, g: 0 };
+                }
                 saveDB();
             }
         } catch(e) { console.log("DB Reset"); saveDB(); }
         
         applyTheme();
+        updateBumpUI();
         initMap();
         initSensors();
         initUI();
@@ -379,9 +348,10 @@
         updateProjectDisplay();
         loop(); 
     };
+
     function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
-    function hardReset() { localStorage.clear();
-        location.reload(); }
+    function hardReset() { localStorage.clear(); location.reload(); }
+
     // --- UI LOGIC ---
     function initUI() {
         const handle = document.getElementById('drag-area');
@@ -394,19 +364,18 @@
                 if (diff < -30 && !app.minimized) togglePanel();
                 if (diff > 30 && app.minimized) togglePanel();
             }
-     
         });
     }
+
     function togglePanel() {
         app.minimized = !app.minimized;
         const panel = document.getElementById('compass-container');
         const body = document.body;
-        if(app.minimized) { panel.classList.add('minimized'); body.classList.add('panel-minimized');
-        } 
-        else { panel.classList.remove('minimized'); body.classList.remove('panel-minimized');
-        }
+        if(app.minimized) { panel.classList.add('minimized'); body.classList.add('panel-minimized'); } 
+        else { panel.classList.remove('minimized'); body.classList.remove('panel-minimized'); }
         centerMapOnUser();
     }
+
     function centerMapOnUser() {
         if(app.lat === null || app.lng === null) return;
         const offset = app.minimized ? 0 : 150;
@@ -416,20 +385,20 @@
         const newCenterLatLng = map.unproject(newCenterPoint, currentZoom);
         map.flyTo(newCenterLatLng, currentZoom, { animate: true, duration: 0.5 });
     }
+
     // --- MATH ---
     const rad = Math.PI / 180;
     const deg = 180 / Math.PI;
     
-    function normalizeAngle(deg) { return ((deg % 360) + 360) % 360;
-    }
+    function normalizeAngle(deg) { return ((deg % 360) + 360) % 360; }
     function lerpAngle(current, target, factor) {
         let diff = target - current;
         while (diff > 180) diff -= 360;
         while (diff < -180) diff += 360;
         return current + diff * factor;
     }
-    function lerp(current, target, factor) { return current + (target - current) * factor;
-    }
+    function lerp(current, target, factor) { return current + (target - current) * factor; }
+
     // --- SENSORS ---
     function initSensors() {
         if ('ondeviceorientationabsolute' in window) {
@@ -438,23 +407,40 @@
             window.addEventListener('deviceorientation', handleOrientation, true);
         }
     }
+
     function handleOrientation(e) {
-        let alpha = e.webkitCompassHeading ||
-        (e.absolute ? e.alpha : e.alpha);
+        let alpha = e.webkitCompassHeading || (e.absolute ? e.alpha : e.alpha);
         if (alpha == null) return;
         
+        // Store raw values for calibration logic
+        app.rawBeta = e.beta;
+        app.rawGamma = e.gamma;
+
+        // Apply Camera Bump Calibration (Tare) if active
+        let currentBeta = e.beta;
+        let currentGamma = e.gamma;
+
+        if (db.settings.bump && db.settings.bump.active) {
+            currentBeta -= db.settings.bump.b;
+            currentGamma -= db.settings.bump.g;
+        }
+
+        // --- Standard Calculations with (potentially) corrected values ---
         const _z = (alpha + (db.settings.calib||0)) * rad;
-        const _x = e.beta * rad;
-        const _y = e.gamma * rad;
+        const _x = currentBeta * rad;
+        const _y = currentGamma * rad;
         
         const cZ = Math.cos(_z), sZ = Math.sin(_z);
         const cX = Math.cos(_x), sX = Math.sin(_x);
         const cY = Math.cos(_y), sY = Math.sin(_y);
+        
         let nx = cZ * sY - sZ * sX * cY;
         let ny = sZ * sY + cZ * sX * cY;
         let nz = cX * cY;
+        
         let bx = -sY * cX;
         let by = sX;
+
         // Landscape Fix
         const ang = window.screen.orientation ? window.screen.orientation.angle : 0;
         if(ang !== 0) {
@@ -465,23 +451,26 @@
             bx = tbx; by = tby;
             alpha += ang;
         }
+
         let dip = Math.acos(Math.abs(nz)) * deg;
         let azimuth = Math.atan2(nx, ny) * deg;
         if(azimuth < 0) azimuth += 360;
 
-        // FIXED HERE: REMOVED "+ 180" TO CORRECT DIP DIRECTION
-        let dipDirRaw = azimuth;
+        // --- BUG FIX (Preserved from previous version) ---
+        // Dip Direction is exactly the calculated azimuth of normal vector
+        let dipDirRaw = azimuth; 
         
         let trueDipDir = (dipDirRaw + db.settings.declination) % 360;
         let strike = (trueDipDir - 90 + 360) % 360;
+        
         app.targetStrike = strike;
         app.targetDip = dip;
         app.targetDipDir = trueDipDir;
-        // Heading for needle
         app.targetHeading = alpha + db.settings.declination;
         app.targetBx = bx; 
         app.targetBy = by;
     }
+
     function loop() {
         if(app.targetStrike !== undefined) {
             smooth.strike = lerpAngle(smooth.strike, app.targetStrike, SMOOTH_FACTOR);
@@ -494,6 +483,7 @@
         }
         requestAnimationFrame(loop);
     }
+
     function updateUI() {
         const s = Math.round(normalizeAngle(smooth.strike));
         const d = Math.round(smooth.dip);
@@ -508,12 +498,39 @@
         let bpx = -smooth.bubbleX * 75; 
         let bpy = smooth.bubbleY * 75; 
         let dist = Math.sqrt(bpx*bpx + bpy*bpy);
-        if (dist > 80) { bpx *= 80/dist; bpy *= 80/dist;
-        }
+        if (dist > 80) { bpx *= 80/dist; bpy *= 80/dist; }
         bubble.style.transform = `translate(calc(-50% + ${bpx}px), calc(-50% + ${bpy}px))`;
-        // Rotate Needle: Negative heading to counter-rotate
         document.getElementById('compass-needle').style.transform = `translate(-50%, -50%) rotate(${-smooth.heading}deg)`;
     }
+
+    // --- BUMP CALIBRATION LOGIC ---
+    function toggleBump() {
+        db.settings.bump.active = !db.settings.bump.active;
+        saveDB();
+        updateBumpUI();
+    }
+
+    function updateBumpUI() {
+        const btn = document.getElementById('bump-btn');
+        if (db.settings.bump.active) btn.classList.add('active');
+        else btn.classList.remove('active');
+    }
+
+    function calibrateBump() {
+        if (app.rawBeta === undefined || app.rawBeta === null) {
+            alert("Sensors not ready yet.");
+            return;
+        }
+        // Capture current sensor values as the "Zero" offset
+        db.settings.bump.b = app.rawBeta;
+        db.settings.bump.g = app.rawGamma;
+        db.settings.bump.active = true;
+        saveDB();
+        updateBumpUI();
+        closeSettings();
+        alert("Calibrated! The current tilt is now set as 0° flat.");
+    }
+
     // --- MAP & APP ---
     function initMap() {
         map = L.map('map', {zoomControl:false}).setView([0,0], 2);
@@ -536,8 +553,9 @@
             document.getElementById('poi-overlay').style.display = 'flex';
         });
     }
-    function toggleLayer() { if(app.isSat) { map.removeLayer(satLayer); osmLayer.addTo(map); } else { map.removeLayer(osmLayer); satLayer.addTo(map); } app.isSat = !app.isSat;
-    }
+
+    function toggleLayer() { if(app.isSat) { map.removeLayer(satLayer); osmLayer.addTo(map); } else { map.removeLayer(osmLayer); satLayer.addTo(map); } app.isSat = !app.isSat; }
+    
     function recordPoint() {
         if(!app.lat) return alert("Waiting for GPS...");
         const logs = db.projects[db.currentProject];
@@ -553,6 +571,7 @@
         el.style.background = "var(--border)"; setTimeout(()=>el.style.background="",150);
         centerMapOnUser();
     }
+
     function createStructIcon(s, d) {
         const sz = 50;
         return L.divIcon({
@@ -562,15 +581,14 @@
             <line x1="50" y1="10" x2="50" y2="90" stroke="#ff9f0a" stroke-width="6" stroke-linecap="round"/>
             <line x1="50" y1="50" x2="80" y2="50" stroke="#ff9f0a" stroke-width="6" stroke-linecap="round"/>
             </svg>
-   
-             <div style="position:absolute;left:80%;top:30%;width:40px;"><div style="transform:rotate(-${s}deg);color:#ff9f0a;font-weight:bold;font-size:14px;text-shadow:0 0 2px black;text-align:center;">${d}</div></div></div>`,
+            <div style="position:absolute;left:80%;top:30%;width:40px;"><div style="transform:rotate(-${s}deg);color:#ff9f0a;font-weight:bold;font-size:14px;text-shadow:0 0 2px black;text-align:center;">${d}</div></div></div>`,
             iconSize:[sz,sz], iconAnchor:[sz/2,sz/2]
         });
     }
+
     function renderLogs() {
         markers.clearLayers();
-        const logs = db.projects[db.currentProject] ||
-        [];
+        const logs = db.projects[db.currentProject] || [];
         const list = document.getElementById('logs-list'); list.innerHTML = "";
         logs.forEach(l => {
             if(l.type === 'poi') L.circleMarker([l.lat, l.lng], {color:'var(--poi)', radius:6}).bindPopup(`<b>${l.name}</b><br>${l.note}`).addTo(markers);
@@ -578,55 +596,35 @@
             
             const div = document.createElement('div'); div.className = `log-item type-${l.type}`;
             const disp = l.type === 'poi' ? `<span style="color:var(--poi)">POI</span>` : `<span style="color:var(--accent)">S${l.s}/D${l.d}</span>`;
- 
             div.innerHTML = `<div style="flex:1;"><div style="font-weight:bold;">${l.name}</div><div>${disp}</div><div style="font-size:0.7rem;color:var(--sub);">${l.t}</div></div>
             <div style="display:flex;gap:5px;"><button class="btn-sm" onclick="startEdit(${l.id})">Edit</button><button class="btn-sm" style="background:var(--danger);color:white;" onclick="delLog(${l.id})">X</button></div>`;
             list.appendChild(div);
         });
     }
-    function delLog(id) { if(confirm("Delete?")) { db.projects[db.currentProject] = db.projects[db.currentProject].filter(x=>x.id!==id); saveDB(); renderLogs();
-    }}
-    function savePoi() { db.projects[db.currentProject].unshift({ id:Date.now(), type:'poi', name:document.getElementById('poi-name').value, note:document.getElementById('poi-note').value, lat:tempClickLatLng.lat, lng:tempClickLatLng.lng, t:new Date().toLocaleString() }); saveDB(); renderLogs(); closePoi();
-    }
-    function startEdit(id) { editingId=id; const l=db.projects[db.currentProject].find(x=>x.id===id); if(l){ document.getElementById('edit-name').value=l.name; document.getElementById('edit-note').value=l.note; document.getElementById('edit-overlay').style.display='flex'; document.getElementById('notebook-overlay').style.display='none';
-    } }
-    function saveEdit() { const l=db.projects[db.currentProject].find(x=>x.id===editingId); if(l){ l.name=document.getElementById('edit-name').value; l.note=document.getElementById('edit-note').value; saveDB(); renderLogs(); } closeEdit();
-    }
+
+    function delLog(id) { if(confirm("Delete?")) { db.projects[db.currentProject] = db.projects[db.currentProject].filter(x=>x.id!==id); saveDB(); renderLogs(); }}
+    function savePoi() { db.projects[db.currentProject].unshift({ id:Date.now(), type:'poi', name:document.getElementById('poi-name').value, note:document.getElementById('poi-note').value, lat:tempClickLatLng.lat, lng:tempClickLatLng.lng, t:new Date().toLocaleString() }); saveDB(); renderLogs(); closePoi(); }
+    function startEdit(id) { editingId=id; const l=db.projects[db.currentProject].find(x=>x.id===id); if(l){ document.getElementById('edit-name').value=l.name; document.getElementById('edit-note').value=l.note; document.getElementById('edit-overlay').style.display='flex'; document.getElementById('notebook-overlay').style.display='none'; } }
+    function saveEdit() { const l=db.projects[db.currentProject].find(x=>x.id===editingId); if(l){ l.name=document.getElementById('edit-name').value; l.note=document.getElementById('edit-note').value; saveDB(); renderLogs(); } closeEdit(); }
     function closeEdit() { document.getElementById('edit-overlay').style.display='none'; document.getElementById('notebook-overlay').style.display='flex'; }
-    function toggleNotebook() { const el=document.getElementById('notebook-overlay'); el.style.display=el.style.display==='flex'?'none':'flex';
-    if(el.style.display==='flex') renderLogs(); }
+    function toggleNotebook() { const el=document.getElementById('notebook-overlay'); el.style.display=el.style.display==='flex'?'none':'flex'; if(el.style.display==='flex') renderLogs(); }
     function closePoi() { document.getElementById('poi-overlay').style.display='none'; }
-    function openSettings() { document.getElementById('settings-overlay').style.display='flex'; document.getElementById('inp-dec').value=db.settings.declination;
-    }
+    function openSettings() { document.getElementById('settings-overlay').style.display='flex'; document.getElementById('inp-dec').value=db.settings.declination; }
     function closeSettings() { document.getElementById('settings-overlay').style.display='none'; db.settings.declination=parseFloat(document.getElementById('inp-dec').value)||0; saveDB(); updateDecDisplay(); }
-    function updateDecDisplay() { const el=document.getElementById('mag-status');
-    el.innerText=db.settings.declination===0?"Mag North":`True North (${db.settings.declination})`; el.classList.toggle('active', db.settings.declination!==0); }
-    function toggleTheme() { db.settings.theme = db.settings.theme === 'dark' ?
-    'light' : 'dark'; saveDB(); applyTheme(); }
-    function applyTheme() { document.documentElement.setAttribute('data-theme', db.settings.theme); document.getElementById('theme-btn').innerText = db.settings.theme === 'dark' ?
-    'Switch to Light Mode' : 'Switch to Dark Mode'; }
+    function updateDecDisplay() { const el=document.getElementById('mag-status'); el.innerText=db.settings.declination===0?"Mag North":`True North (${db.settings.declination})`; el.classList.toggle('active', db.settings.declination!==0); }
+    function toggleTheme() { db.settings.theme = db.settings.theme === 'dark' ? 'light' : 'dark'; saveDB(); applyTheme(); }
+    function applyTheme() { document.documentElement.setAttribute('data-theme', db.settings.theme); document.getElementById('theme-btn').innerText = db.settings.theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'; }
     
-    function openProjects() { const list = document.getElementById('project-list');
-    list.innerHTML = ''; Object.keys(db.projects).forEach(p => { const div = document.createElement('div'); div.className = `proj-item ${p === db.currentProject ? 'active' : ''}`; div.innerHTML = `<span>${p}</span> <span style="font-size:0.8rem; color:var(--sub)">${db.projects[p].length} pts</span>`; div.onclick = () => switchProject(p); list.appendChild(div); });
-    document.getElementById('project-overlay').style.display = 'flex'; }
-    function createProject() { const name = document.getElementById('new-proj-name').value.trim();
-    if(name && !db.projects[name]) { db.projects[name] = []; switchProject(name); } }
-    function switchProject(name) { db.currentProject = name; saveDB();
-    updateProjectDisplay(); renderLogs(); document.getElementById('project-overlay').style.display = 'none'; }
-    function updateProjectDisplay() { document.getElementById('current-proj-name').innerText = db.currentProject;
-    }
+    function openProjects() { const list = document.getElementById('project-list'); list.innerHTML = ''; Object.keys(db.projects).forEach(p => { const div = document.createElement('div'); div.className = `proj-item ${p === db.currentProject ? 'active' : ''}`; div.innerHTML = `<span>${p}</span> <span style="font-size:0.8rem; color:var(--sub)">${db.projects[p].length} pts</span>`; div.onclick = () => switchProject(p); list.appendChild(div); }); document.getElementById('project-overlay').style.display = 'flex'; }
+    function createProject() { const name = document.getElementById('new-proj-name').value.trim(); if(name && !db.projects[name]) { db.projects[name] = []; switchProject(name); } }
+    function switchProject(name) { db.currentProject = name; saveDB(); updateProjectDisplay(); renderLogs(); document.getElementById('project-overlay').style.display = 'none'; }
+    function updateProjectDisplay() { document.getElementById('current-proj-name').innerText = db.currentProject; }
     function closeProjects() { document.getElementById('project-overlay').style.display = 'none'; }
-    function exportCSV() { const logs=db.projects[db.currentProject];
-    const csv="Type,Name,Note,Strike,Dip,DipDir,Lat,Lng,Time\n"+logs.map(l=>`${l.type},"${l.name}","${l.note}",${l.s},${l.d},${l.dd},${l.lat},${l.lng},"${l.t}"`).join('\n'); downloadFile(csv, 'csv', 'csv'); }
-    function exportKML() { const logs=db.projects[db.currentProject]; let kml=`<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${db.currentProject}</name><Style id="s"><IconStyle><scale>1.2</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/arrow.png</href></Icon></IconStyle></Style>`;
-    logs.forEach(l => { if(l.type==='poi') kml+=`<Placemark><name>${l.name}</name><description>${l.note}</description><Point><coordinates>${l.lng},${l.lat},0</coordinates></Point></Placemark>`; else kml+=`<Placemark><name>${l.name}</name><description>S:${l.s} D:${l.d}</description><styleUrl>#s</styleUrl><Style><IconStyle><heading>${l.dd}</heading></IconStyle></Style><Point><coordinates>${l.lng},${l.lat},0</coordinates></Point></Placemark>`; }); kml+='</Document></kml>'; downloadFile(kml, 'kml', 'application/vnd.google-earth.kml+xml');
-    }
-    function downloadFile(c, e, t) { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([c],{type:t})); a.download=`${db.currentProject}.${e}`; a.click();
-    }
+    function exportCSV() { const logs=db.projects[db.currentProject]; const csv="Type,Name,Note,Strike,Dip,DipDir,Lat,Lng,Time\n"+logs.map(l=>`${l.type},"${l.name}","${l.note}",${l.s},${l.d},${l.dd},${l.lat},${l.lng},"${l.t}"`).join('\n'); downloadFile(csv, 'csv', 'csv'); }
+    function exportKML() { const logs=db.projects[db.currentProject]; let kml=`<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${db.currentProject}</name><Style id="s"><IconStyle><scale>1.2</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/arrow.png</href></Icon></IconStyle></Style>`; logs.forEach(l => { if(l.type==='poi') kml+=`<Placemark><name>${l.name}</name><description>${l.note}</description><Point><coordinates>${l.lng},${l.lat},0</coordinates></Point></Placemark>`; else kml+=`<Placemark><name>${l.name}</name><description>S:${l.s} D:${l.d}</description><styleUrl>#s</styleUrl><Style><IconStyle><heading>${l.dd}</heading></IconStyle></Style><Point><coordinates>${l.lng},${l.lat},0</coordinates></Point></Placemark>`; }); kml+='</Document></kml>'; downloadFile(kml, 'kml', 'application/vnd.google-earth.kml+xml'); }
+    function downloadFile(c, e, t) { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([c],{type:t})); a.download=`${db.currentProject}.${e}`; a.click(); }
     function autoDec() { window.open(`https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml?lat=${app.lat}&lon=${app.lng}`,'_blank'); }
-    
-    function calibrateCompass() { db.settings.calib = 0;
-    saveDB(); alert("Compass Reset. Please wave phone in figure-8."); }
+    function calibrateCompass() { db.settings.calib = 0; saveDB(); alert("Compass Reset. Please wave phone in figure-8."); }
 </script>
 </body>
 </html>
