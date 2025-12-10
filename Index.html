@@ -468,17 +468,16 @@
         let dip = Math.acos(Math.abs(nz)) * deg;
         let azimuth = Math.atan2(nx, ny) * deg;
         if(azimuth < 0) azimuth += 360;
-        let dipDirRaw = (azimuth + 180) % 360;
+
+        // FIXED HERE: REMOVED "+ 180" TO CORRECT DIP DIRECTION
+        let dipDirRaw = azimuth;
+        
         let trueDipDir = (dipDirRaw + db.settings.declination) % 360;
         let strike = (trueDipDir - 90 + 360) % 360;
         app.targetStrike = strike;
         app.targetDip = dip;
         app.targetDipDir = trueDipDir;
-        // Heading for needle: Raw Azimuth + Declination
-        // Azimuth = where phone top points relative to North.
-        // If Phone points East (90), Needle must point Left (-90).
-        // So Heading = Azimuth.
-        // Wait, alpha is heading. 
+        // Heading for needle
         app.targetHeading = alpha + db.settings.declination;
         app.targetBx = bx; 
         app.targetBy = by;
