@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Brunton Omni v20 (Rotary Card)</title>
+<title>Brunton Omni v21 (Fixed Azimuth)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
     /* --- THEME VARIABLES --- */
@@ -120,11 +120,8 @@
     /* Standard Geography: West Left, East Right */
     #north-marker { top: 10px; left: 50%; transform: translateX(-50%); color: var(--danger); font-size:1rem; }
     #south-marker { bottom: 10px; left: 50%; transform: translateX(-50%); }
-    #west-marker { top: 50%; left: 10px; transform: translateY(-50%); } /* W on LEFT */
-    #east-marker { top: 50%; right: 10px; transform: translateY(-50%); } /* E on RIGHT */
-    
-    /* Ticks */
-    .tick { position: absolute; background: var(--sub); width: 2px; height: 6px; left: 50%; transform-origin: 50% 90px; top: 0; opacity: 0.5; }
+    #west-marker { top: 50%; left: 10px; transform: translateY(-50%); } 
+    #east-marker { top: 50%; right: 10px; transform: translateY(-50%); } 
     
     /* Fixed Needle (Index Mark) */
     #fixed-needle {
@@ -147,19 +144,24 @@
         box-shadow: inset 0 0 8px rgba(0,0,0,0.2); transition: transform 0.1s linear;
         border: 1px solid rgba(255,255,255,0.4); z-index: 4;
     }
-    /* Crosshair for Bubble Center */
     #bubble-target {
         position: absolute; top: 50%; left: 50%; width: 40px; height: 40px;
         border: 1px solid var(--sub); border-radius: 50%; transform: translate(-50%, -50%);
         opacity: 0.3; pointer-events: none; z-index: 3;
     }
 
-    /* Cards */
+    /* Cards - Updated Hierarchy */
     .data-row { display: flex; width: 100%; justify-content: center; gap: 10px; }
     .card { background: var(--bg); padding: 10px; border-radius: 12px; text-align: center; flex: 1; max-width: 140px; border: 1px solid var(--border); }
     .card-label { font-size: 0.65rem; color: var(--sub); margin-bottom: 2px; text-transform: uppercase; }
-    .card-val { font-size: 2.2rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
     
+    /* New: Big Vals for Dip/Dir */
+    .card-val-lg { font-size: 2.2rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; color: var(--text); }
+    
+    /* New: Small secondary text for Strike */
+    .strike-display { margin-top: 10px; font-size: 0.9rem; color: var(--sub); text-align: center; }
+    .strike-val { font-weight: bold; color: var(--text); font-variant-numeric: tabular-nums; }
+
     .btn-grid { width: 100%; display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 8px; margin-top: 5px; }
     .btn {
         border: none; padding: 12px 0; border-radius: 8px; font-weight: 700; cursor: pointer; 
@@ -223,7 +225,7 @@
     <div id="compass-container">
         <div id="drag-area"><div id="drag-pill"></div></div>
         <div id="mini-header">
-            <div class="flex-row"><span class="mini-lbl">STR</span><span id="mini-s" class="mini-val">000</span></div>
+            <div class="flex-row"><span class="mini-lbl">DIP DIR</span><span id="mini-dd" class="mini-val">000</span></div>
             <div class="flex-row"><span class="mini-lbl">DIP</span><span id="mini-d" class="mini-val">00</span></div>
         </div>
         <div id="full-content">
@@ -232,20 +234,23 @@
                     <div id="compass-face">
                         <div id="north-marker" class="cardinal">N</div>
                         <div id="south-marker" class="cardinal">S</div>
-                        <div id="west-marker" class="cardinal">W</div> <div id="east-marker" class="cardinal">E</div> </div>
-                    
+                        <div id="west-marker" class="cardinal">W</div> 
+                        <div id="east-marker" class="cardinal">E</div> 
+                    </div>
                     <div id="bubble-target"></div>
                     <div id="level-bubble"></div>
-                    
                     <div id="fixed-needle"></div>
                     <div id="needle-pivot"></div>
                 </div>
             </div>
+            
             <div class="data-row">
-                <div class="card"><div class="card-label">Strike</div><div id="val-strike" class="card-val">---</div></div>
-                <div class="card"><div class="card-label">Dip</div><div id="val-dip" class="card-val">---</div></div>
+                <div class="card"><div class="card-label">Dip Direction</div><div id="val-dipdir" class="card-val-lg">---</div></div>
+                <div class="card"><div class="card-label">Dip Angle</div><div id="val-dip" class="card-val-lg">---</div></div>
             </div>
-            <div style="font-size: 0.8rem; color: var(--sub);">Dip Direction: <span id="val-dipdir" style="color:var(--text); font-weight:bold;">---</span></div>
+            
+            <div class="strike-display">Strike Line: <span id="val-strike" class="strike-val">---</span> (0-180°)</div>
+            
             <div class="btn-grid">
                 <button class="btn btn-primary" onclick="recordPoint()">RECORD</button>
                 <button class="btn" onclick="toggleNotebook()">DATA</button>
@@ -316,9 +321,9 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    const DB_KEY = 'brunton_db_v20';
+    const DB_KEY = 'brunton_db_v21';
     let db = { 
-        version: 20, 
+        version: 21, 
         settings: { 
             theme: 'dark', 
             declination: 0, 
@@ -343,10 +348,10 @@
                 if(!loaded.settings.bump) loaded.settings.bump = { active: false, b: 0, g: 0 };
                 db = loaded;
             } else {
-                const old = localStorage.getItem('brunton_db_v19');
+                const old = localStorage.getItem('brunton_db_v20');
                 if(old) {
                     db = JSON.parse(old);
-                    db.version = 20;
+                    db.version = 21;
                     if(!db.settings.bump) db.settings.bump = { active: false, b: 0, g: 0 };
                 }
                 saveDB();
@@ -429,7 +434,6 @@
         app.rawBeta = e.beta;
         app.rawGamma = e.gamma;
 
-        // Apply Camera Bump Calibration (Tare)
         let currentBeta = e.beta;
         let currentGamma = e.gamma;
         if (db.settings.bump && db.settings.bump.active) {
@@ -452,7 +456,6 @@
         let bx = -sY * cX;
         let by = sX;
 
-        // Landscape Fix
         const ang = window.screen.orientation ? window.screen.orientation.angle : 0;
         if(ang !== 0) {
             const sa = -ang * rad;
@@ -467,13 +470,16 @@
         let azimuth = Math.atan2(nx, ny) * deg;
         if(azimuth < 0) azimuth += 360;
 
-        // Fix from previous version: Dip Direction IS Azimuth.
         let dipDirRaw = azimuth; 
         
         let trueDipDir = (dipDirRaw + db.settings.declination) % 360;
-        let strike = (trueDipDir - 90 + 360) % 360;
         
-        app.targetStrike = strike;
+        // --- STRIKE LOGIC CHANGED ---
+        // Normal calc: (DipDir - 90)
+        let strikeRaw = (trueDipDir - 90 + 360) % 360;
+        
+        // Target values
+        app.targetStrike = strikeRaw;
         app.targetDip = dip;
         app.targetDipDir = trueDipDir;
         app.targetHeading = alpha + db.settings.declination;
@@ -499,11 +505,17 @@
         const d = Math.round(smooth.dip);
         const dd = Math.round(normalizeAngle(smooth.dipDir));
         
-        document.getElementById('val-strike').innerText = s + "°";
-        document.getElementById('val-dip').innerText = d + "°";
+        // --- DISPLAY LOGIC CHANGED ---
+        // Strike is always displayed as 0-180 for user comfort (Non-RHR display)
+        let strikeDisplay = s % 180;
+
         document.getElementById('val-dipdir').innerText = dd + "°";
-        document.getElementById('mini-s').innerText = s + "°";
+        document.getElementById('val-dip').innerText = d + "°";
+        document.getElementById('val-strike').innerText = strikeDisplay + "°"; // 0-180
+        
+        document.getElementById('mini-dd').innerText = dd + "°";
         document.getElementById('mini-d').innerText = d + "°";
+        
         const bubble = document.getElementById('level-bubble');
         let bpx = -smooth.bubbleX * 75; 
         let bpy = smooth.bubbleY * 75; 
@@ -511,9 +523,9 @@
         if (dist > 80) { bpx *= 80/dist; bpy *= 80/dist; }
         bubble.style.transform = `translate(calc(-50% + ${bpx}px), calc(-50% + ${bpy}px))`;
         
-        // ROTATING CARD LOGIC:
-        // If heading is 90 (East), Card rotates -90 so 'E' is at top (aligned with fixed needle)
-        document.getElementById('compass-face').style.transform = `rotate(${-smooth.heading}deg)`;
+        // --- ROTATION FIX ---
+        // Inverted rotation to match user preference: Positive rotation
+        document.getElementById('compass-face').style.transform = `rotate(${smooth.heading}deg)`;
     }
 
     // --- BUMP CALIBRATION LOGIC ---
@@ -571,6 +583,7 @@
     function recordPoint() {
         if(!app.lat) return alert("Waiting for GPS...");
         const logs = db.projects[db.currentProject];
+        // Record RAW RHR Strike for data consistency, but Display is handled in renderLogs
         logs.unshift({
             id: Date.now(), type: 'geo', name: `Stn-${logs.length+1}`, note: '',
             s: Math.round(normalizeAngle(smooth.strike)), 
@@ -607,7 +620,7 @@
             else L.marker([l.lat, l.lng], {icon:createStructIcon(l.s, l.d)}).bindPopup(`<b>${l.name}</b><br>S:${l.s} D:${l.d}`).addTo(markers);
             
             const div = document.createElement('div'); div.className = `log-item type-${l.type}`;
-            const disp = l.type === 'poi' ? `<span style="color:var(--poi)">POI</span>` : `<span style="color:var(--accent)">S${l.s}/D${l.d}</span>`;
+            const disp = l.type === 'poi' ? `<span style="color:var(--poi)">POI</span>` : `<span style="color:var(--accent)">S${l.s%180}/D${l.d}</span>`; // Display 0-180 here too
             div.innerHTML = `<div style="flex:1;"><div style="font-weight:bold;">${l.name}</div><div>${disp}</div><div style="font-size:0.7rem;color:var(--sub);">${l.t}</div></div>
             <div style="display:flex;gap:5px;"><button class="btn-sm" onclick="startEdit(${l.id})">Edit</button><button class="btn-sm" style="background:var(--danger);color:white;" onclick="delLog(${l.id})">X</button></div>`;
             list.appendChild(div);
